@@ -65,7 +65,7 @@ int main(int argc, char** argv)
 	fclose(f);
 
 	// Emulate 100 instructions
-	for (int i = 0; i < 100000; i++)//gf
+	for (int i = 0; i < 100000; i++)
 	{
 		printf("Instruction %d: ", i);
 		Emulate(state);
