@@ -115,6 +115,10 @@ void Emulate(State8080* state)
 		state->e = address & 0xff;
 		break;
 	}
+	case 0x14:
+		state->d++;
+		SetFlags(state->d, state);
+		break;
 	case 0x19:
 	{
 		uint16_t hl = (state->h << 8) | state->l;
@@ -166,6 +170,15 @@ void Emulate(State8080* state)
 		uint16_t address = (state->h << 8) | state->l;
 		state->memory[address] = opcode[1];
 		state->pc++;
+		break;
+	}
+	case 0x39:
+	{
+		uint16_t hl = (state->h << 8) | state->l;
+		uint32_t answer = hl + state->sp;
+		state->h = (answer >> 8) & 0xff;
+		state->l = answer & 0xff;
+		state->cc.cy = (answer > 0xff);
 		break;
 	}
 	case 0x41:
@@ -242,6 +255,8 @@ void Emulate(State8080* state)
 		state->pc = (opcode[2] << 8) | opcode[1] - 1;
 		break;
 	}
+	case 0xd3:
+		break;
 	case 0xd5:
 		state->memory[state->sp - 2] = state->e;
 		state->memory[state->sp - 1] = state->d;
@@ -252,6 +267,15 @@ void Emulate(State8080* state)
 		state->memory[state->sp - 1] = state->h;
 		state->sp -= 2;
 		break;
+	case 0xeb:
+	{
+		uint8_t temp = state->d;
+		state->d = state->h;
+		state->h = temp;
+		temp = state->e;
+		state->e = state->l;
+		state->l = temp;
+	}
 	case 0xfe:
 	{
 		uint8_t x = state->a - opcode[1];
