@@ -65,7 +65,7 @@ int main(int argc, char** argv)
 	fclose(f);
 
 	// Emulate 100 instructions
-	for (int i = 0; i < 100000; i++)
+	for (int i = 0; i <= 38000; i++)
 	{
 		printf("Instruction %d: ", i);
 		Emulate(state);
@@ -98,6 +98,16 @@ void Emulate(State8080* state)
 		state->b = opcode[1];
 		state->pc += 1;
 		break;
+	case 0x09:
+	{
+		uint16_t hl = (state->h << 8) | state->l;
+		uint16_t bc = (state->b << 8) | state->c;
+		uint32_t answer = hl + bc;
+		state->h = (answer >> 8) & 0xff;
+		state->l = answer & 0xff;
+		state->cc.cy = (answer > 0xff);
+		break;
+	}
 	case 0xe:
 		state->c = opcode[1];
 		state->pc++;
@@ -205,23 +215,31 @@ void Emulate(State8080* state)
 	case 0x80:
 	{
 		uint16_t answer = (uint16_t)state->a + (uint16_t)state->b;
+		state->a = answer & 0xff;
 		SetFlags(answer, state);
 		break;
 	}		
 	case 0x81:
 	{
 		uint16_t answer = (uint16_t)state->a + (uint16_t)state->c;
+		state->a = answer & 0xff;
 		SetFlags(answer, state);
 		break;
 	}		
 	case 0x86:
 	{
 		// TODO: Fix this. I probably accidentally delted code
-		uint16_t offset = state->h * 256 + state->l;
-		uint16_t answer = 0;
+		uint16_t address = state->h * 256 + state->l;
+		uint16_t answer = (uint16_t)state->a + (uint16_t)state->memory[address];
+		state->a = answer & 0xff;
 		SetFlags(answer, state);
 		break;
-	}		
+	}
+	case 0xc1:
+		state->c = state->memory[state->sp];
+		state->b = state->memory[state->sp + 1];
+		state->sp += 2;
+		break;
 	case 0xc2:
 		if (state->cc.z == 0)
 		{
@@ -234,6 +252,11 @@ void Emulate(State8080* state)
 		break;
 	case 0xc3: // JUMP
 		state->pc = ((opcode[2] << 8) | opcode[1]) - 1;
+		break;
+	case 0xc5:
+		state->memory[state->sp - 2] = state->c;
+		state->memory[state->sp - 1] = state->b;
+		state->sp -= 2;
 		break;
 	case 0xc6:
 	{
@@ -256,11 +279,17 @@ void Emulate(State8080* state)
 		break;
 	}
 	case 0xd3:
+		state->pc++;
 		break;
 	case 0xd5:
 		state->memory[state->sp - 2] = state->e;
 		state->memory[state->sp - 1] = state->d;
 		state->sp -= 2;
+		break;
+	case 0xe1:
+		state->l = state->memory[state->sp];
+		state->h = state->memory[state->sp + 1];
+		state->sp += 2;
 		break;
 	case 0xe5:
 		state->memory[state->sp - 2] = state->l;
@@ -275,6 +304,7 @@ void Emulate(State8080* state)
 		temp = state->e;
 		state->e = state->l;
 		state->l = temp;
+		break;
 	}
 	case 0xfe:
 	{
@@ -295,7 +325,6 @@ void SetFlags(int answer, State8080* state)
 	state->cc.z = ((answer & 0xff) == 0);
 	state->cc.s = ((answer & 0x80) != 0);
 	state->cc.cy = (answer > 0xff);
-	state->a = answer & 0xff;
 }
 
 /*
