@@ -26,8 +26,8 @@ typedef struct State8080 {
 	uint8_t e;
 	uint8_t h;
 	uint8_t l;
-	uint16_t sp = 0xf000;
-	uint16_t pc;
+	uint16_t sp = 0xf000; // Stack pointer
+	uint16_t pc; // Program counter
 	uint8_t *memory;
 	struct ConditionCodes cc;
 	uint8_t int_enable;
@@ -40,6 +40,11 @@ int main(int argc, char** argv)
 {
 	// Open ROM file
 	FILE *f;
+	if (argv[1] == nullptr)
+	{
+		printf("Error: File name not entered as command line argument");
+		exit(1);
+	}
 	int errorcode = fopen_s(&f, argv[1], "rb");
 	if (errorcode != 0)
 	{
@@ -65,7 +70,7 @@ int main(int argc, char** argv)
 	fclose(f);
 
 	// Emulate 100 instructions
-	for (int i = 0; i <= 38000; i++)
+	for (int i = 0; i <= 50000; i++)
 	{
 		printf("Instruction %d: ", i);
 		Emulate(state);
@@ -108,6 +113,10 @@ void Emulate(State8080* state)
 		state->cc.cy = (answer > 0xff);
 		break;
 	}
+	case 0xd: // DCR C
+		state->c -= 1;
+		SetFlags(state->c, state);
+		break;
 	case 0xe:
 		state->c = opcode[1];
 		state->pc++;
@@ -200,6 +209,24 @@ void Emulate(State8080* state)
 	case 0x43:
 		state->b = state->e;
 		break;
+	case 0x56:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->d = state->memory[address];
+		break;
+	}		
+	case 0x5e:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->e = state->memory[address];
+		break;
+	}
+	case 0x66:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->h = state->memory[address];
+		break;
+	}
 	case 0x6f:
 		state->l = state->a;
 		break;
@@ -209,9 +236,18 @@ void Emulate(State8080* state)
 		state->memory[address] = state->a;
 		break;
 	}
+	case 0x7a: // MOV A, D
+		state->a = state->d;
+		break;
 	case 0x7c:
 		state->a = state->h;
 		break;
+	case 0x7e:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->a = state->memory[address];
+		break;
+	}		
 	case 0x80:
 	{
 		uint16_t answer = (uint16_t)state->a + (uint16_t)state->b;
@@ -278,6 +314,11 @@ void Emulate(State8080* state)
 		state->pc = (opcode[2] << 8) | opcode[1] - 1;
 		break;
 	}
+	case 0xd1: // POP D
+		state->e = state->sp;
+		state->d = state->sp + 1;
+		state->sp += 2;
+		break;
 	case 0xd3:
 		state->pc++;
 		break;
@@ -324,6 +365,7 @@ void SetFlags(int answer, State8080* state)
 {
 	state->cc.z = ((answer & 0xff) == 0);
 	state->cc.s = ((answer & 0x80) != 0);
+	state->cc.p = answer % 2 == 0;
 	state->cc.cy = (answer > 0xff);
 }
 
