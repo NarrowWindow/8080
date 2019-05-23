@@ -121,6 +121,13 @@ void Emulate(State8080* state)
 		state->c = opcode[1];
 		state->pc++;
 		break;
+	case 0xf:
+	{
+		bool lastBit = state->a & 0b1;
+		state->a = state->a << 7 | lastBit;
+		state->cc.cy = lastBit;
+		break;
+	}
 	case 0x11: // LXI DE
 		state->d = opcode[2];
 		state->e = opcode[1];
@@ -184,6 +191,13 @@ void Emulate(State8080* state)
 		state->sp = opcode[2] * 256 + opcode[1];
 		state->pc += 2;
 		break;
+	case 0x32:
+	{
+		uint16_t address = (opcode[2] << 8) | opcode[1];
+		state->memory[address] = state->a;
+		state->pc += 2;
+		break;
+	}		
 	case 0x36:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -200,6 +214,17 @@ void Emulate(State8080* state)
 		state->cc.cy = (answer > 0xff);
 		break;
 	}
+	case 0x3a:
+	{
+		uint16_t address = (opcode[2] << 8) | opcode[1];
+		state->a = state->memory[address];
+		state->pc += 2;
+		break;
+	}
+	case 0x3e:
+		state->a = opcode[1];
+		state->pc++;
+		break;
 	case 0x41:
 		state->b = state->c;
 		break;
@@ -221,6 +246,9 @@ void Emulate(State8080* state)
 		state->e = state->memory[address];
 		break;
 	}
+	case 0x5f: // MOV E, A
+		state->e = state->a;
+		break;
 	case 0x66:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -239,6 +267,8 @@ void Emulate(State8080* state)
 	case 0x7a: // MOV A, D
 		state->a = state->d;
 		break;
+	case 0x7b: // MOV A, E
+		state->a = state->e;
 	case 0x7c:
 		state->a = state->h;
 		break;
@@ -271,6 +301,9 @@ void Emulate(State8080* state)
 		SetFlags(answer, state);
 		break;
 	}
+	case 0xaf:
+		state->a = state->a ^ state->a;
+		break;
 	case 0xc1:
 		state->c = state->memory[state->sp];
 		state->b = state->memory[state->sp + 1];
@@ -298,6 +331,7 @@ void Emulate(State8080* state)
 	{
 		uint16_t answer = (uint16_t)state->a + (uint16_t)opcode[1];
 		SetFlags(answer, state);
+		state->pc++;
 		break;
 	}		
 	case 0xc9: // RETURN
@@ -337,6 +371,11 @@ void Emulate(State8080* state)
 		state->memory[state->sp - 1] = state->h;
 		state->sp -= 2;
 		break;
+	case 0xe6:
+		state->a = state->a & opcode[1];
+		SetFlags(state->a, state);
+		state->pc++;
+		break;
 	case 0xeb:
 	{
 		uint8_t temp = state->d;
@@ -347,12 +386,23 @@ void Emulate(State8080* state)
 		state->l = temp;
 		break;
 	}
+	case 0xf1:
+		state->cc.z = state->memory[state->sp] & 0b1;
+		state->cc.s = (state->memory[state->sp] >> 1) & 0b1;
+		state->cc.p = (state->memory[state->sp] >> 2) & 0b1;
+		state->cc.cy = (state->memory[state->sp] >> 3) & 0b1;
+		state->cc.ac = (state->memory[state->sp] >> 4) & 0b1;
+		state->a = state->memory[state->sp + 1];
+		state->sp += 2;
+		break;
+	case 0xf5:
+		state->memory[state->sp - 1] = state->a;
+		state->memory[state->sp - 2] = state->cc.z | (state->cc.s << 1) | (state->cc.p << 2) | (state->cc.cy << 3) | (state->cc.ac << 4);
+		state->sp -= 2;
+		break;
 	case 0xfe:
 	{
-		uint8_t x = state->a - opcode[1];
-		state->cc.z = (x == 0);
-		state->cc.s = (0x80 == (x & 0x80));
-		state->cc.cy = (state->a < opcode[1]);
+		SetFlags(state->a - opcode[1], state);
 		state->pc++;
 		break;
 	}		
