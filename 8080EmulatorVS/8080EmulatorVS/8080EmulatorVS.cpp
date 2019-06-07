@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdio.h>
 #include <SDL.h>
+#include "SDLHelper.h"
 #undef main // SDL.h for whatever reason defines main as something else and breaks int main()
 
 using namespace std;
@@ -26,6 +27,7 @@ typedef struct State8080 {
 	uint8_t e;
 	uint8_t h;
 	uint8_t l;
+	bool interrupt_enabled;
 	uint16_t sp = 0xf000; // Stack pointer
 	uint16_t pc; // Program counter
 	uint8_t *memory;
@@ -69,14 +71,38 @@ int main(int argc, char** argv)
 	fread(state->memory, fsize, 1, f);
 	fclose(f);
 
+	SDLHelper sdlHelper;
+	sdlHelper.init();
+
 	// Emulate 100 instructions
-	for (int i = 0; i <= 50000; i++)
+	for (int i = 0; i <= 48000; i++)
 	{
 		printf("Instruction %d: ", i);
 		Emulate(state);
 	}
+
+	int videoPointer = 0x2400;
+	for (int w = 0; w < 256; w++)
+	{
+		for (int h = 0; h < 224; h++)
+		{
+			if (state->memory[videoPointer] == 0)
+			{
+				SDL_SetRenderDrawColor(sdlHelper.renderer, 0x00, 0x00, 0x00, 0xFF);
+			}
+			else
+			{
+				SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+			}
+			SDL_RenderDrawPoint(sdlHelper.renderer, w, h);
+			videoPointer++;
+		}
+	}
+	SDL_RenderPresent(sdlHelper.renderer);
 	
 	free(state->memory);
+
+	getchar();
 
 	return 0;
 }
@@ -301,6 +327,9 @@ void Emulate(State8080* state)
 		SetFlags(answer, state);
 		break;
 	}
+	case 0xa7:
+		SetFlags(state->a, state);
+		break;
 	case 0xaf:
 		state->a = state->a ^ state->a;
 		break;
@@ -395,10 +424,16 @@ void Emulate(State8080* state)
 		state->a = state->memory[state->sp + 1];
 		state->sp += 2;
 		break;
+	case 0xf3: // DI
+		state->interrupt_enabled = false;
+		break;
 	case 0xf5:
 		state->memory[state->sp - 1] = state->a;
 		state->memory[state->sp - 2] = state->cc.z | (state->cc.s << 1) | (state->cc.p << 2) | (state->cc.cy << 3) | (state->cc.ac << 4);
 		state->sp -= 2;
+		break;
+	case 0xfb: // EI
+		state->interrupt_enabled = true;
 		break;
 	case 0xfe:
 	{
