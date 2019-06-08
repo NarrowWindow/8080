@@ -38,6 +38,8 @@ typedef struct State8080 {
 void Emulate(State8080* state);
 void SetFlags(int answer, State8080* state);
 
+SDLHelper sdlHelper;
+
 int main(int argc, char** argv)
 {
 	// Open ROM file
@@ -71,34 +73,43 @@ int main(int argc, char** argv)
 	fread(state->memory, fsize, 1, f);
 	fclose(f);
 
-	SDLHelper sdlHelper;
+	
 	sdlHelper.init();
 
 	// Emulate 100 instructions
-	for (int i = 0; i <= 48000; i++)
+	for (int i = 0; i <= 40000; i++)
 	{
 		printf("Instruction %d: ", i);
-		Emulate(state);
-	}
 
-	int videoPointer = 0x2400;
-	for (int w = 0; w < 256; w++)
-	{
-		for (int h = 0; h < 224; h++)
+		Emulate(state);
+
+		if (i > 37515)
 		{
-			if (state->memory[videoPointer] == 0)
+			int videoPointer = 0x2400;
+			for (int w = 0; w < 32; w++)
 			{
-				SDL_SetRenderDrawColor(sdlHelper.renderer, 0x00, 0x00, 0x00, 0xFF);
+				for (int h = 0; h < 224; h++)
+				{
+					int byte = state->memory[videoPointer];
+					for (int b = 0; b < 8; b++)
+					{
+						if (byte % 2 == 0)
+						{
+							SDL_SetRenderDrawColor(sdlHelper.renderer, 0x0, 0x0, 0x0, 0xFF);
+						}
+						else
+						{
+							SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+						}
+						SDL_RenderDrawPoint(sdlHelper.renderer, w * 8, h * 8 + b);
+						byte /= 2;
+					}
+					videoPointer++;
+				}
 			}
-			else
-			{
-				SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-			}
-			SDL_RenderDrawPoint(sdlHelper.renderer, w, h);
-			videoPointer++;
-		}
+			SDL_RenderPresent(sdlHelper.renderer);
+		}		
 	}
-	SDL_RenderPresent(sdlHelper.renderer);
 	
 	free(state->memory);
 
@@ -110,15 +121,16 @@ int main(int argc, char** argv)
 void Emulate(State8080* state)
 {
 	unsigned char *opcode = &state->memory[state->pc];
-	printf("Currently running instruction 0x%x at address 0x%x\n", *opcode, state->pc);
+	printf("Currently running instruction 0x%x at address 0x%x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x\n", *opcode, state->pc, state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp);
+	printf("Stack is: %x %x %x %x %x\n", state->memory[state->sp], state->memory[state->sp + 1], state->memory[state->sp + 2], state->memory[state->sp + 3], state->memory[state->sp + 4]);
 
 	switch (*opcode)
 	{
 	case 0x00: 
 		break;
 	case 0x01: 
-		state->c = opcode[2];
-		state->b = opcode[1];
+		state->c = opcode[1];
+		state->b = opcode[2];
 		state->pc += 2;
 		break;
 	case 0x05:
@@ -378,8 +390,8 @@ void Emulate(State8080* state)
 		break;
 	}
 	case 0xd1: // POP D
-		state->e = state->sp;
-		state->d = state->sp + 1;
+		state->e = state->memory[state->sp];
+		state->d = state->memory[state->sp + 1];
 		state->sp += 2;
 		break;
 	case 0xd3:
@@ -444,6 +456,8 @@ void Emulate(State8080* state)
 	default: printf("Error: Instruction 0x%x not implemented.", *opcode); exit(1);
 	}
 	state->pc += 1;
+
+	
 }
 
 void SetFlags(int answer, State8080* state)
