@@ -76,23 +76,31 @@ int main(int argc, char** argv)
 	
 	sdlHelper.init();
 
-	// Emulate 100 instructions
-	for (int i = 0; i <= 40000; i++)
+	for (int j = 0x2400; j <= 0x3FFF; j++)
+	{
+		state->memory[j] = 0b11111111;
+	}
+
+	// Emulate instructions
+	for (int i = 0; i <= 43000; i++)
 	{
 		printf("Instruction %d: ", i);
 
+		
+
 		Emulate(state);
 
-		if (i > 37515)
+		if (i > 35000)
 		{
 			int videoPointer = 0x2400;
-			for (int w = 0; w < 32; w++)
+			for (int h = 0; h < 224; h++)
 			{
-				for (int h = 0; h < 224; h++)
+				for (int w = 0; w < 32; w++)
 				{
 					int byte = state->memory[videoPointer];
 					for (int b = 0; b < 8; b++)
 					{
+						
 						if (byte % 2 == 0)
 						{
 							SDL_SetRenderDrawColor(sdlHelper.renderer, 0x0, 0x0, 0x0, 0xFF);
@@ -101,7 +109,7 @@ int main(int argc, char** argv)
 						{
 							SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
 						}
-						SDL_RenderDrawPoint(sdlHelper.renderer, w * 8, h * 8 + b);
+						SDL_RenderDrawPoint(sdlHelper.renderer, (w + 1) * 8 - b - 1, h);
 						byte /= 2;
 					}
 					videoPointer++;
@@ -122,7 +130,7 @@ void Emulate(State8080* state)
 {
 	unsigned char *opcode = &state->memory[state->pc];
 	printf("Currently running instruction 0x%x at address 0x%x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x\n", *opcode, state->pc, state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp);
-	printf("Stack is: %x %x %x %x %x\n", state->memory[state->sp], state->memory[state->sp + 1], state->memory[state->sp + 2], state->memory[state->sp + 3], state->memory[state->sp + 4]);
+	//printf("Stack is: %x %x %x %x %x\n", state->memory[state->sp], state->memory[state->sp + 1], state->memory[state->sp + 2], state->memory[state->sp + 3], state->memory[state->sp + 4]);
 
 	switch (*opcode)
 	{
