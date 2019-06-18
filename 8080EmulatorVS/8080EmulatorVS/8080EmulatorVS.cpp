@@ -60,7 +60,7 @@ int main(int argc, char** argv)
 
 		Emulate(state);
 
-		if (i % 100 == 0)
+		if (i >= 40000 && i % 100 == 0)
 		{
 			UpdateDisplay(state, sdlHelper);
 		}
@@ -360,6 +360,7 @@ void Emulate(State8080* state)
 	{
 		uint16_t answer = (uint16_t)state->a + (uint16_t)opcode[1];
 		SetFlags(answer, state);
+		state->a = answer;
 		state->pc++;
 		break;
 	}		
