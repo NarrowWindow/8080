@@ -60,7 +60,7 @@ int main(int argc, char** argv)
 
 		Emulate(state);
 
-		if (i % 120 == 0)
+		if (i % 100 == 0)
 		{
 			UpdateDisplay(state, sdlHelper);
 		}
@@ -474,7 +474,7 @@ void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 				{
 					SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
 				}
-				SDL_RenderDrawPoint(sdlHelper.renderer, w, (h) * 8 + b);
+				SDL_RenderDrawPoint(sdlHelper.renderer, w, (h + 1) * 8 - b);
 				int nh = (h + 1) * 8 - b - 1;
 				int nw = w;
 				byte /= 2;
