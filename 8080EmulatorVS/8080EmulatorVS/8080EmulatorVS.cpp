@@ -37,93 +37,73 @@ typedef struct State8080 {
 
 void Emulate(State8080* state);
 void SetFlags(int answer, State8080* state);
+void Init(State8080* state, char* romFile);
+void UpdateDisplay(State8080* state, SDLHelper sdlHelper);
 
 SDLHelper sdlHelper;
 
 int main(int argc, char** argv)
 {
+	// Create the registers and memory of the 8080 processor
+	State8080* state = new State8080();
+
+	// Initialize the state of the processor
+	Init(state, argv[1]);
+	
+	// Initialize SDL
+	sdlHelper.init();	
+
+	// Emulate a fixed number of instructions
+	for (int i = 0; i <= 40000; i++)
+	{
+		printf("Instruction %d: ", i);		
+
+		Emulate(state);
+
+		if (i % 100 == 0)
+		{
+			UpdateDisplay(state, sdlHelper);
+		}		
+	}
+	
+	delete(state);
+	getchar();
+
+	return 0;
+}
+
+void Init(State8080* state, char* romName)
+{
 	// Open ROM file
-	FILE *f;
-	if (argv[1] == nullptr)
+	FILE* romFile;
+	if (romName == nullptr)
 	{
 		printf("Error: File name not entered as command line argument");
 		exit(1);
 	}
-	int errorcode = fopen_s(&f, argv[1], "rb");
+	int errorcode = fopen_s(&romFile, romName, "rb");
 	if (errorcode != 0)
 	{
-		printf("Error: Could not open file %s\n", argv[1]);
+		printf("Error: Could not open file %s\n", romName);
 		exit(1);
 	}
 
-	fseek(f, 0L, SEEK_END);
-	int fsize = ftell(f);
-	fseek(f, 0L, SEEK_SET);
-
-	// Allocate space in memory for the ROM
-	//unsigned char *buffer = (unsigned char*)malloc(0xffff);
-
-	// Create the registers and memory of the 8080
-	State8080* state = new State8080();
+	fseek(romFile, 0L, SEEK_END);
+	int fsize = ftell(romFile);
+	fseek(romFile, 0L, SEEK_SET);
 
 	// Allocate memory to store the ROM
 	state->memory = (uint8_t*)malloc(0xffff);
-	
+
 	// Store the rom in allocated memory
-	fread(state->memory, fsize, 1, f);
-	fclose(f);
+	fread(state->memory, fsize, 1, romFile);
+	fclose(romFile);
 
-	
-	sdlHelper.init();
-
-	for (int j = 0x2400; j <= 0x3FFF; j++)
+	// Clear the RAM
+	for (int i = 0x2400; i <= 0x3FFF; i++)
 	{
-		state->memory[j] = 0b11111111;
+		state->memory[i] = 0b11111111;
 	}
-
-	// Emulate instructions
-	for (int i = 0; i <= 43000; i++)
-	{
-		printf("Instruction %d: ", i);
-
-		
-
-		Emulate(state);
-
-		if (i > 35000)
-		{
-			int videoPointer = 0x2400;
-			for (int h = 0; h < 224; h++)
-			{
-				for (int w = 0; w < 32; w++)
-				{
-					int byte = state->memory[videoPointer];
-					for (int b = 0; b < 8; b++)
-					{
-						
-						if (byte % 2 == 0)
-						{
-							SDL_SetRenderDrawColor(sdlHelper.renderer, 0x0, 0x0, 0x0, 0xFF);
-						}
-						else
-						{
-							SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
-						}
-						SDL_RenderDrawPoint(sdlHelper.renderer, (w + 1) * 8 - b - 1, h);
-						byte /= 2;
-					}
-					videoPointer++;
-				}
-			}
-			SDL_RenderPresent(sdlHelper.renderer);
-		}		
-	}
-	
-	free(state->memory);
-
-	getchar();
-
-	return 0;
 }
 
 void Emulate(State8080* state)
@@ -476,61 +456,30 @@ void SetFlags(int answer, State8080* state)
 	state->cc.cy = (answer > 0xff);
 }
 
-/*
-
-void PutPixel32_nolock(SDL_Surface*, int, int, Uint32);
-
-int main()
+void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 {
-	if (SDL_Init(SDL_INIT_VIDEO) != 0)
+	int videoPointer = 0x2400;
+	for (int h = 0; h < 224; h++)
 	{
-		cout << "SDL_Init Error: " << SDL_GetError() << endl;
-		return 1;
-	}
-	
-	SDL_Window *win = SDL_CreateWindow("Hello World!", 100, 100, 640, 480, SDL_WINDOW_SHOWN);
-	if (win == nullptr)
-	{
-		std::cout << "SDL_CreateWindow Error: " << SDL_GetError() << std::endl;
-		SDL_Quit();
-		return 1;
-	}
-	
-	SDL_Renderer *ren = SDL_CreateRenderer(win, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-	if (ren == nullptr)
-	{
-		SDL_DestroyWindow(win);
-		cout << "SDL_CreateRenderer Error: " << SDL_GetError() << endl;
-		SDL_Quit();
-		return 1;
-	}
-
-	SDL_Surface *surface = SDL_CreateRGBSurface(0, 640, 480, 32, 0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
-	if (surface == nullptr)
-	{
-		SDL_DestroyWindow(win);
-		cout << "Error: " << SDL_GetError() << endl;
-		SDL_Quit();
-		return 1;
-	}
-
-	for (int i = 0; i < 640; i++)
-	{
-		for (int j = 0; j < 480; j++)
+		for (int w = 0; w < 32; w++)
 		{
-			PutPixel32_nolock(surface, i, j, 0x00000000);
-		}		
+			int byte = state->memory[videoPointer];
+			for (int b = 0; b < 8; b++)
+			{
+
+				if (byte % 2 == 0)
+				{
+					SDL_SetRenderDrawColor(sdlHelper.renderer, 0x0, 0x0, 0x0, 0xFF);
+				}
+				else
+				{
+					SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+				}
+				SDL_RenderDrawPoint(sdlHelper.renderer, (w + 1) * 8 - b - 1, h);
+				byte /= 2;
+			}
+			videoPointer++;
+		}
 	}
-	
-
-    return 0;
+	SDL_RenderPresent(sdlHelper.renderer);
 }
-
-void PutPixel32_nolock(SDL_Surface * surface, int x, int y, Uint32 color)
-{
-	Uint8 * pixel = (Uint8*)surface->pixels;
-	pixel += (y * surface->pitch) + (x * sizeof(Uint32));
-	*((Uint32*)pixel) = color;
-}
-
-*/
