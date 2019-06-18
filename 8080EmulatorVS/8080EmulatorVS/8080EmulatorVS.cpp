@@ -54,16 +54,16 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 40000; i++)
+	for (int i = 0; i <= 43000; i++)
 	{
 		printf("Instruction %d: ", i);		
 
 		Emulate(state);
 
-		if (i % 100 == 0)
+		if (i % 120 == 0)
 		{
 			UpdateDisplay(state, sdlHelper);
-		}		
+		}
 	}
 	
 	delete(state);
@@ -459,14 +459,13 @@ void SetFlags(int answer, State8080* state)
 void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 {
 	int videoPointer = 0x2400;
-	for (int h = 0; h < 224; h++)
+	for (int w = 0; w < 224; w++)
 	{
-		for (int w = 0; w < 32; w++)
+		for (int h = 31; h >= 0; h--)
 		{
 			int byte = state->memory[videoPointer];
 			for (int b = 0; b < 8; b++)
 			{
-
 				if (byte % 2 == 0)
 				{
 					SDL_SetRenderDrawColor(sdlHelper.renderer, 0x0, 0x0, 0x0, 0xFF);
@@ -475,7 +474,9 @@ void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 				{
 					SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
 				}
-				SDL_RenderDrawPoint(sdlHelper.renderer, (w + 1) * 8 - b - 1, h);
+				SDL_RenderDrawPoint(sdlHelper.renderer, w, (h) * 8 + b);
+				int nh = (h + 1) * 8 - b - 1;
+				int nw = w;
 				byte /= 2;
 			}
 			videoPointer++;

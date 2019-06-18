@@ -8,7 +8,7 @@ bool SDLHelper::init()
 		return false;
 	}
 
-	window = SDL_CreateWindow("8080 Emulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 256, 224, SDL_WINDOW_SHOWN);
+	window = SDL_CreateWindow("8080 Emulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 224, 256, SDL_WINDOW_SHOWN);
 	if (window == NULL)
 	{
 		printf("Window could not be created! SDL Error: %s\n", SDL_GetError());
