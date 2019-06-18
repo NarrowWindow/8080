@@ -60,9 +60,10 @@ int main(int argc, char** argv)
 
 		Emulate(state);
 
-		if (i >= 40000 && i % 100 == 0)
+		if (i % 100 == 0)
 		{
 			UpdateDisplay(state, sdlHelper);
+			//break;
 		}
 	}
 	
@@ -295,6 +296,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x7b: // MOV A, E
 		state->a = state->e;
+		break;
 	case 0x7c:
 		state->a = state->h;
 		break;
