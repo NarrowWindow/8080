@@ -54,16 +54,33 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 43000; i++)
+	for (int i = 0; i <= 48000; i++)
 	{
 		printf("Instruction %d: ", i);		
 
 		Emulate(state);
 
+		// Manually set video interrupts
+		if (i == 42433 || i == 45564)
+		{
+			state->pc--;
+			state->memory[state->sp - 1] = (state->pc >> 8) & 0xff;
+			state->memory[state->sp - 2] = state->pc & 0xff;
+			state->pc = 16;					
+			state->sp -= 2;
+		}
+		else if (i == 44000 || i == 47131)
+		{
+			state->pc--;
+			state->memory[state->sp - 1] = (state->pc >> 8) & 0xff;
+			state->memory[state->sp - 2] = state->pc & 0xff;
+			state->pc = 8;
+			state->sp -= 2;
+		}
+
 		if (i % 100 == 0)
 		{
 			UpdateDisplay(state, sdlHelper);
-			//break;
 		}
 	}
 	
@@ -101,9 +118,13 @@ void Init(State8080* state, char* romName)
 	fclose(romFile);
 
 	// Clear the RAM
+	for (int i = 0x2000; i <= 0x23FF; i++)
+	{
+		state->memory[i] = 0;
+	}
 	for (int i = 0x2400; i <= 0x3FFF; i++)
 	{
-		state->memory[i] = 0b11111111;
+		state->memory[i] = 0xFF;
 	}
 }
 
@@ -224,7 +245,14 @@ void Emulate(State8080* state)
 		state->memory[address] = state->a;
 		state->pc += 2;
 		break;
-	}		
+	}
+	case 0x35:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->memory[address] -= 1;
+		SetFlags(state->memory[address], state);
+		break;
+	}
 	case 0x36:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -248,6 +276,10 @@ void Emulate(State8080* state)
 		state->pc += 2;
 		break;
 	}
+	case 0x3d:
+		state->a -= 1;
+		SetFlags(state->a, state);
+		break;
 	case 0x3e:
 		state->a = opcode[1];
 		state->pc++;
@@ -322,7 +354,6 @@ void Emulate(State8080* state)
 	}		
 	case 0x86:
 	{
-		// TODO: Fix this. I probably accidentally delted code
 		uint16_t address = state->h * 256 + state->l;
 		uint16_t answer = (uint16_t)state->a + (uint16_t)state->memory[address];
 		state->a = answer & 0xff;
@@ -365,11 +396,28 @@ void Emulate(State8080* state)
 		state->a = answer;
 		state->pc++;
 		break;
-	}		
+	}
+	case 0xc8:
+		if (state->cc.z)
+		{
+			state->pc = state->memory[state->sp] | (state->memory[state->sp + 1] << 8);
+			state->sp += 2;
+		}
+		break;
 	case 0xc9: // RETURN
 		// Get the return address from the stack
-		state->pc = state->memory[state->sp] | (state->memory[state->sp + 1] << 8);
+		state->pc = (state->memory[state->sp] | (state->memory[state->sp + 1] << 8));
 		state->sp += 2;
+		break;
+	case 0xca:
+		if (state->cc.z)
+		{
+			state->pc = (opcode[2] << 8) | opcode[1] - 1;
+		}
+		else
+		{
+			state->pc += 2;
+		}
 		break;
 	case 0xcd: // CALL
 	{
@@ -385,6 +433,16 @@ void Emulate(State8080* state)
 		state->d = state->memory[state->sp + 1];
 		state->sp += 2;
 		break;
+	case 0xd2:
+		if (!state->cc.cy)
+		{
+			state->pc = (opcode[2] << 8) | opcode[1] - 1;
+		}
+		else
+		{
+			state->pc += 2;
+		}
+		break;
 	case 0xd3:
 		state->pc++;
 		break;
@@ -392,6 +450,32 @@ void Emulate(State8080* state)
 		state->memory[state->sp - 2] = state->e;
 		state->memory[state->sp - 1] = state->d;
 		state->sp -= 2;
+		break;
+	case 0xda:
+		if (state->cc.cy)
+		{
+			state->pc = (opcode[2] << 8) | opcode[1] - 1;
+		}
+		else
+		{
+			state->pc += 2;
+		}
+		break;
+	case 0xdb:
+		if (opcode[1] == 1)
+		{
+			state->a = 0b00010000;
+		}
+		else if (opcode[1] == 2)
+		{
+			state->a = 0;
+		}
+		else
+		{
+			printf("IN requesting port that is not 1 or 2");
+			getchar();
+		}
+		state->pc++;
 		break;
 	case 0xe1:
 		state->l = state->memory[state->sp];
@@ -444,7 +528,8 @@ void Emulate(State8080* state)
 		state->pc++;
 		break;
 	}		
-	default: printf("Error: Instruction 0x%x not implemented.", *opcode); exit(1);
+	default: 
+		printf("Error: Instruction 0x%x not implemented.", *opcode); getchar();
 	}
 	state->pc += 1;
 
@@ -477,9 +562,7 @@ void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 				{
 					SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
 				}
-				SDL_RenderDrawPoint(sdlHelper.renderer, w, (h + 1) * 8 - b);
-				int nh = (h + 1) * 8 - b - 1;
-				int nw = w;
+				SDL_RenderDrawPoint(sdlHelper.renderer, w, (h + 1) * 8 - b - 1);
 				byte /= 2;
 			}
 			videoPointer++;
