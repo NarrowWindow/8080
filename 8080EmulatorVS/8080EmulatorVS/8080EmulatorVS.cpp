@@ -54,9 +54,12 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 48000; i++)
+	for (int i = 0; i <= 1000000; i++)
 	{
-		printf("Instruction %d: ", i);		
+		if (i > 800000)
+		{
+			printf("Instruction %d: Currently running instruction 0x%x at address 0x%x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x\n", i, state->memory[state->pc], state->pc, state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp);
+		}		
 
 		Emulate(state);
 
@@ -77,8 +80,24 @@ int main(int argc, char** argv)
 			state->pc = 8;
 			state->sp -= 2;
 		}
+		else if (i > 47131 && i % 3134 == 0)
+		{
+			state->pc--;
+			state->memory[state->sp - 1] = (state->pc >> 8) & 0xff;
+			state->memory[state->sp - 2] = state->pc & 0xff;
+			state->pc = 16;
+			state->sp -= 2;
+		}
+		else if (i > 47131 && i % 3134 == 1567)
+		{
+			state->pc--;
+			state->memory[state->sp - 1] = (state->pc >> 8) & 0xff;
+			state->memory[state->sp - 2] = state->pc & 0xff;
+			state->pc = 8;
+			state->sp -= 2;
+		}
 
-		if (i % 100 == 0)
+		if (i % 500 == 0)
 		{
 			UpdateDisplay(state, sdlHelper);
 		}
@@ -131,9 +150,6 @@ void Init(State8080* state, char* romName)
 void Emulate(State8080* state)
 {
 	unsigned char *opcode = &state->memory[state->pc];
-	printf("Currently running instruction 0x%x at address 0x%x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x\n", *opcode, state->pc, state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp);
-	//printf("Stack is: %x %x %x %x %x\n", state->memory[state->sp], state->memory[state->sp + 1], state->memory[state->sp + 2], state->memory[state->sp + 3], state->memory[state->sp + 4]);
-
 	switch (*opcode)
 	{
 	case 0x00: 
@@ -143,6 +159,14 @@ void Emulate(State8080* state)
 		state->b = opcode[2];
 		state->pc += 2;
 		break;
+	case 0x03:
+	{
+		uint16_t bc = (state->b << 8) | state->c;
+		uint32_t answer = bc + 1;
+		state->b = (answer >> 8) & 0xff;
+		state->c = answer & 0xff;
+		break;
+	}
 	case 0x05:
 		state->b -= 1;
 		SetFlags(state->b, state);
@@ -159,6 +183,12 @@ void Emulate(State8080* state)
 		state->h = (answer >> 8) & 0xff;
 		state->l = answer & 0xff;
 		state->cc.cy = (answer > 0xff);
+		break;
+	}
+	case 0xa:
+	{
+		uint16_t address = (state->b << 8) | state->c;
+		state->a = state->memory[address];
 		break;
 	}
 	case 0xd: // DCR C
@@ -260,6 +290,9 @@ void Emulate(State8080* state)
 		state->pc++;
 		break;
 	}
+	case 0x37:
+		state->cc.cy = 1;
+		break;
 	case 0x39:
 	{
 		uint16_t hl = (state->h << 8) | state->l;
@@ -298,7 +331,10 @@ void Emulate(State8080* state)
 		uint16_t address = (state->h << 8) | state->l;
 		state->d = state->memory[address];
 		break;
-	}		
+	}
+	case 0x57:
+		state->d = state->a;
+		break;
 	case 0x5e:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -314,6 +350,9 @@ void Emulate(State8080* state)
 		state->h = state->memory[address];
 		break;
 	}
+	case 0x67:
+		state->h = state->a;
+		break;
 	case 0x6f:
 		state->l = state->a;
 		break;
@@ -491,6 +530,13 @@ void Emulate(State8080* state)
 		state->a = state->a & opcode[1];
 		SetFlags(state->a, state);
 		state->pc++;
+		break;
+	case 0xe8: // RPE : Return if parity flag is true
+		if (state->cc.p)
+		{
+			state->pc = (state->memory[state->sp] | (state->memory[state->sp + 1] << 8));
+			state->sp += 2;
+		}
 		break;
 	case 0xeb:
 	{
