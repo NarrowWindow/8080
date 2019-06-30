@@ -54,9 +54,9 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 1000000; i++)
+	for (int i = 0; i <= 500000; i++)
 	{
-		if (i > 800000)
+		if (i > 4000000 && i % 1 == 0)
 		{
 			printf("Instruction %d: Currently running instruction 0x%x at address 0x%x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x\n", i, state->memory[state->pc], state->pc, state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp);
 		}		
@@ -97,7 +97,7 @@ int main(int argc, char** argv)
 			state->sp -= 2;
 		}
 
-		if (i % 500 == 0)
+		if (i % 1000 == 0)
 		{
 			UpdateDisplay(state, sdlHelper);
 		}
@@ -265,6 +265,10 @@ void Emulate(State8080* state)
 		state->cc.cy = (answer > 0xff);
 		break;
 	}
+	case 0x2e:
+		state->l = opcode[1];
+		state->pc++;
+		break;
 	case 0x31:
 		state->sp = opcode[2] * 256 + opcode[1];
 		state->pc += 2;
@@ -326,6 +330,9 @@ void Emulate(State8080* state)
 	case 0x43:
 		state->b = state->e;
 		break;
+	case 0x4f:
+		state->c = state->a;
+		break;
 	case 0x56:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -362,6 +369,9 @@ void Emulate(State8080* state)
 		state->memory[address] = state->a;
 		break;
 	}
+	case 0x79:
+		state->a = state->c;
+		break;
 	case 0x7a: // MOV A, D
 		state->a = state->d;
 		break;
@@ -370,6 +380,9 @@ void Emulate(State8080* state)
 		break;
 	case 0x7c:
 		state->a = state->h;
+		break;
+	case 0x7d: // MOV A,L - register A = register L
+		state->a = state->l;
 		break;
 	case 0x7e:
 	{
@@ -405,6 +418,13 @@ void Emulate(State8080* state)
 	case 0xaf:
 		state->a = state->a ^ state->a;
 		break;
+	case 0xb6:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->a = state->a | state->memory[address];
+		SetFlags(state->a, state);
+		break;
+	}		
 	case 0xc1:
 		state->c = state->memory[state->sp];
 		state->b = state->memory[state->sp + 1];
@@ -443,8 +463,7 @@ void Emulate(State8080* state)
 			state->sp += 2;
 		}
 		break;
-	case 0xc9: // RETURN
-		// Get the return address from the stack
+	case 0xc9: // RET - Get the return address from the stack and put it in the program counter
 		state->pc = (state->memory[state->sp] | (state->memory[state->sp + 1] << 8));
 		state->sp += 2;
 		break;
@@ -490,6 +509,13 @@ void Emulate(State8080* state)
 		state->memory[state->sp - 1] = state->d;
 		state->sp -= 2;
 		break;
+	case 0xd8: // RC - Return if carry flag is true
+		if (state->cc.cy)
+		{
+			state->pc = (state->memory[state->sp] | (state->memory[state->sp + 1] << 8));
+			state->sp += 2;
+		}
+		break;
 	case 0xda:
 		if (state->cc.cy)
 		{
@@ -531,7 +557,7 @@ void Emulate(State8080* state)
 		SetFlags(state->a, state);
 		state->pc++;
 		break;
-	case 0xe8: // RPE : Return if parity flag is true
+	case 0xe8: // RPE - Return if parity flag is true
 		if (state->cc.p)
 		{
 			state->pc = (state->memory[state->sp] | (state->memory[state->sp + 1] << 8));
