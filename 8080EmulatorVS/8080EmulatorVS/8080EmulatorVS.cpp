@@ -56,10 +56,7 @@ int main(int argc, char** argv)
 	// Emulate a fixed number of instructions
 	for (int i = 0; i <= 500000; i++)
 	{
-		if (i > 4000000 && i % 1 == 0)
-		{
-			printf("Instruction %d: Currently running instruction 0x%x at address 0x%x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x\n", i, state->memory[state->pc], state->pc, state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp);
-		}		
+		printf("Instruction %d: Currently running instruction 0x%02x at address 0x%x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x\n", i, state->memory[state->pc], state->pc, state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp);
 
 		Emulate(state);
 
@@ -144,6 +141,10 @@ void Init(State8080* state, char* romName)
 	for (int i = 0x2400; i <= 0x3FFF; i++)
 	{
 		state->memory[i] = 0xFF;
+	}
+	for (int i = 0x4000; i <= 0xFFFF; i++)
+	{
+		state->memory[i] = 0;
 	}
 }
 
@@ -330,8 +331,16 @@ void Emulate(State8080* state)
 	case 0x43:
 		state->b = state->e;
 		break;
+	case 0x4d:
+		state->c = state->l;
+		break;
 	case 0x4f:
 		state->c = state->a;
+		break;
+	case 0x52: // MOV D,D
+		break;
+	case 0x53: // MOV D,E
+		state->d = state->e;
 		break;
 	case 0x56:
 	{
@@ -412,6 +421,10 @@ void Emulate(State8080* state)
 		SetFlags(answer, state);
 		break;
 	}
+	case 0x89:
+		state->a += state->c + state->cc.cy;
+		SetFlags(state->a, state);
+		break;
 	case 0xa7:
 		SetFlags(state->a, state);
 		break;
@@ -424,7 +437,14 @@ void Emulate(State8080* state)
 		state->a = state->a | state->memory[address];
 		SetFlags(state->a, state);
 		break;
-	}		
+	}
+	case 0xc0:
+		if (state->cc.z == 0)
+		{
+			state->pc = (state->memory[state->sp] | (state->memory[state->sp + 1] << 8));
+			state->sp += 2;
+		}
+		break;
 	case 0xc1:
 		state->c = state->memory[state->sp];
 		state->b = state->memory[state->sp + 1];
@@ -591,6 +611,16 @@ void Emulate(State8080* state)
 		state->memory[state->sp - 2] = state->cc.z | (state->cc.s << 1) | (state->cc.p << 2) | (state->cc.cy << 3) | (state->cc.ac << 4);
 		state->sp -= 2;
 		break;
+	case 0xfa: // JM adr - Jump if the sign condition code is 1
+		if (state->cc.s == 1)
+		{
+			state->pc = ((opcode[2] << 8) | opcode[1]) - 1;
+		}
+		else
+		{
+			state->pc += 2;
+		}		
+		break;
 	case 0xfb: // EI
 		state->interrupt_enabled = true;
 		break;
@@ -601,7 +631,7 @@ void Emulate(State8080* state)
 		break;
 	}		
 	default: 
-		printf("Error: Instruction 0x%x not implemented.", *opcode); getchar();
+		printf("Error: Instruction 0x%02x not implemented.", *opcode); getchar();
 	}
 	state->pc += 1;
 
