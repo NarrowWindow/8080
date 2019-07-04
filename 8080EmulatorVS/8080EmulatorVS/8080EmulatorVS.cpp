@@ -41,6 +41,7 @@ void SetFlags(int answer, State8080* state);
 void Init(State8080* state, char* romFile);
 void UpdateDisplay(State8080* state, SDLHelper sdlHelper);
 void ProcessInterrupt(State8080* state);
+void Return(State8080* state);
 
 SDLHelper sdlHelper;
 
@@ -76,40 +77,6 @@ int main(int argc, char** argv)
 		}		
 
 		Emulate(state);
-
-		//// Manually set video interrupts
-		//if (i == 42433 || i == 45564)
-		//{
-		//	state->pc--;
-		//	state->memory[state->sp - 1] = (state->pc >> 8) & 0xff;
-		//	state->memory[state->sp - 2] = state->pc & 0xff;
-		//	state->pc = 16;					
-		//	state->sp -= 2;
-		//}
-		//else if (i == 44000 || i == 47131)
-		//{
-		//	state->pc--;
-		//	state->memory[state->sp - 1] = (state->pc >> 8) & 0xff;
-		//	state->memory[state->sp - 2] = state->pc & 0xff;
-		//	state->pc = 8;
-		//	state->sp -= 2;
-		//}
-		//else if (i > 47131 && i % 3134 == 0)
-		//{
-		//	state->pc--;
-		//	state->memory[state->sp - 1] = (state->pc >> 8) & 0xff;
-		//	state->memory[state->sp - 2] = state->pc & 0xff;
-		//	state->pc = 16;
-		//	state->sp -= 2;
-		//}
-		//else if (i > 47131 && i % 3134 == 1567)
-		//{
-		//	state->pc--;
-		//	state->memory[state->sp - 1] = (state->pc >> 8) & 0xff;
-		//	state->memory[state->sp - 2] = state->pc & 0xff;
-		//	state->pc = 8;
-		//	state->sp -= 2;
-		//}
 
 		ProcessInterrupt(state);
 
@@ -191,6 +158,12 @@ void ProcessInterrupt(State8080* state)
 		}
 		state->cycles += 16667;
 	}
+}
+
+void Return(State8080* state)
+{
+	state->pc = (state->memory[state->sp] | (state->memory[state->sp + 1] << 8));
+	state->sp += 2;
 }
 
 void Emulate(State8080* state)
@@ -535,6 +508,11 @@ void Emulate(State8080* state)
 		SetFlags(state->a, state);
 		state->cycles -= 4;
 		break;
+	case 0xa8:
+		state->a = state->a ^ state->b;
+		SetFlags(state->a, state);
+		state->cycles -= 4;
+		break;
 	case 0xaf:
 		state->a = state->a ^ state->a;
 		state->cycles -= 4;
@@ -557,11 +535,11 @@ void Emulate(State8080* state)
 		{
 			state->pc = (state->memory[state->sp] | (state->memory[state->sp + 1] << 8));
 			state->sp += 2;
-			state->cycles -= 5;
+			state->cycles -= 11;
 		}
 		else
 		{
-			state->cycles -= 11;
+			state->cycles -= 5;
 		}		
 		break;
 	case 0xc1:
@@ -641,6 +619,17 @@ void Emulate(State8080* state)
 		state->cycles -= 17;
 		break;
 	}
+	case 0xd0:
+		if (state->cc.cy == 0)
+		{
+			Return(state);
+			state->cycles -= 11;
+		}
+		else
+		{
+			state->cycles -= 5;
+		}
+		break;
 	case 0xd1: // POP D
 		state->e = state->memory[state->sp];
 		state->d = state->memory[state->sp + 1];
@@ -716,6 +705,17 @@ void Emulate(State8080* state)
 		state->sp += 2;
 		state->cycles -= 10;
 		break;
+	case 0xe3:
+	{
+		uint8_t temp = state->l - 1;
+		state->l = state->memory[state->sp];
+		state->memory[state->sp] = temp;
+		temp = state->h;
+		state->h = state->memory[state->sp + 1];
+		state->memory[state->sp + 1] = temp;
+		state->cycles -= 4;
+		break;
+	}
 	case 0xe5:
 		state->memory[state->sp - 2] = state->l;
 		state->memory[state->sp - 1] = state->h;
@@ -740,6 +740,12 @@ void Emulate(State8080* state)
 			state->cycles -= 5;
 		}
 		break;
+	case 0xe9:
+	{
+		state->pc = (state->h << 8) | state->l - 1;
+		state->cycles -= 4;
+		break;
+	}
 	case 0xeb:
 	{
 		uint8_t temp = state->d;
