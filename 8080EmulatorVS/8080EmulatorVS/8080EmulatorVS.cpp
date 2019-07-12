@@ -40,7 +40,7 @@ void Emulate(State8080* state);
 void SetFlags(int answer, bool changeCarry, State8080* state);
 void Init(State8080* state, char* romFile);
 void UpdateDisplay(State8080* state, SDLHelper sdlHelper);
-void ProcessInterrupt(State8080* state);
+void ProcessInterrupt(State8080* state, SDLHelper* sdlHelper);
 void Return(State8080* state);
 void Call(uint16_t newAddress, int instructionSize, State8080* state);
 
@@ -58,9 +58,9 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 2500000; i++)
+	for (int i = 0; i <= 3000000; i++)
 	{
-		if (i > 2450000)
+		if (i > 2750014 && i < 2750035)
 		{
 			printf("Instruction %d: Currently running instruction 0x%02x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x %d ", i, state->memory[state->pc], state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp, 16667 - state->cycles);
 			
@@ -79,14 +79,7 @@ int main(int argc, char** argv)
 
 		Emulate(state);
 
-		ProcessInterrupt(state);
-
-		if (i > 2000000 && i % 1000 == 0)
-		{
-			UpdateDisplay(state, sdlHelper);
-		}
-
-		
+		ProcessInterrupt(state, &sdlHelper);
 	}
 	
 	delete(state);
@@ -137,9 +130,9 @@ void Init(State8080* state, char* romName)
 	}
 }
 
-void ProcessInterrupt(State8080* state)
+void ProcessInterrupt(State8080* state, SDLHelper* sdlHelper)
 {
-	if (state->cycles < 0)
+	if (state->cycles <= 0)
 	{
 		if (state->interrupt_enabled)
 		{
@@ -155,6 +148,7 @@ void ProcessInterrupt(State8080* state)
 			{
 				state->interrupt_pointer = 0x10;
 			}
+			UpdateDisplay(state, *sdlHelper);
 		}
 		state->cycles += 16667;
 	}
@@ -239,7 +233,7 @@ void Emulate(State8080* state)
 		uint32_t answer = hl + bc;
 		state->h = (answer >> 8) & 0xff;
 		state->l = answer & 0xff;
-		state->cc.cy = (answer > 0xff);
+		state->cc.cy = (answer > 0xffff);
 		state->pc++;
 		state->cycles -= 11;
 		break;
@@ -398,7 +392,12 @@ void Emulate(State8080* state)
 		state->cycles -= 6;
 		break;
 	}
-	
+	case 0x2c:
+		state->l++;
+		SetFlags(state->l, false, state);
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x2e:
 		state->l = opcode[1];
 		state->pc += 2;
@@ -420,6 +419,15 @@ void Emulate(State8080* state)
 		state->memory[address] = state->a;
 		state->pc += 3;
 		state->cycles -= 13;
+		break;
+	}
+	case 0x34:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->memory[address]++;
+		SetFlags(state->memory[address], false, state);
+		state->pc++;
+		state->cycles -= 10;
 		break;
 	}
 	case 0x35:
@@ -588,6 +596,11 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 5;
 		break;
+	case 0x69:
+		state->l = state->c;
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x6f:
 		state->l = state->a;
 		state->pc++;
@@ -597,6 +610,14 @@ void Emulate(State8080* state)
 	{
 		uint16_t address = (state->h << 8) | state->l;
 		state->memory[address] = state->b;
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
+	case 0x71:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->memory[address] = state->c;
 		state->pc++;
 		state->cycles -= 7;
 		break;
@@ -664,10 +685,16 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 4;
 		break;
-	}		
+	}
+	case 0x85:
+		state->a += state->l;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
 	case 0x86:
 	{
-		uint16_t address = state->h * 256 + state->l;
+		uint16_t address = (state->h << 8) | state->l;
 		uint16_t answer = (uint16_t)state->a + (uint16_t)state->memory[address];
 		state->a = answer & 0xff;
 		SetFlags(answer, true, state);
@@ -681,6 +708,21 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0xa0:
+		state->a = state->a & state->b;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xa6:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		state->a = state->a & state->memory[address];
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
 	case 0xa7:
 		SetFlags(state->a, true, state);
 		state->pc++;
@@ -715,6 +757,19 @@ void Emulate(State8080* state)
 		uint16_t address = (state->h << 8) | state->l;
 		state->a = state->a | state->memory[address];
 		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
+	case 0xb8:
+		SetFlags(state->a - state->b, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xbe:
+	{
+		uint16_t address = (state->h << 8) | state->l;
+		SetFlags(state->a - state->memory[address], true, state);
 		state->pc++;
 		state->cycles -= 7;
 		break;
