@@ -19,6 +19,15 @@ typedef struct ConditionCodes {
 	uint8_t pad : 3;
 };
 
+typedef struct Ports {
+	uint8_t r0 : 1;
+	uint8_t r1 : 1;
+	uint8_t r2 : 1;
+	uint8_t w3 : 1;
+	uint8_t w5 : 1;
+	uint8_t w6 : 1;
+};
+
 typedef struct State8080 {
 	uint8_t a;
 	uint8_t b;
@@ -32,8 +41,11 @@ typedef struct State8080 {
 	uint16_t pc; // Program counter
 	uint8_t *memory;
 	struct ConditionCodes cc;
+	struct Ports ports;
 	int cycles = 16667;
 	uint16_t interrupt_pointer = 0x10;
+	uint16_t shift = 0x0;
+	uint8_t shift_amount = 0x0;
 };
 
 void Emulate(State8080* state);
@@ -43,6 +55,8 @@ void UpdateDisplay(State8080* state, SDLHelper sdlHelper);
 void ProcessInterrupt(State8080* state, SDLHelper* sdlHelper);
 void Return(State8080* state);
 void Call(uint16_t newAddress, int instructionSize, State8080* state);
+void WriteToPort(int port, State8080* state);
+void ReadFromPort(int port, State8080* state);
 
 SDLHelper sdlHelper;
 
@@ -58,9 +72,9 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 3000000; i++)
+	for (int i = 0; i <= 2800000; i++)
 	{
-		if (i > 2750014 && i < 2750035)
+		if (i > 2749914 && i % 10 == 0)
 		{
 			printf("Instruction %d: Currently running instruction 0x%02x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x %d ", i, state->memory[state->pc], state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp, 16667 - state->cycles);
 			
@@ -167,6 +181,54 @@ void Call(uint16_t newAddress, int instructionSize, State8080* state)
 	state->memory[state->sp - 2] = returnAddress & 0xff;
 	state->sp -= 2;
 	state->pc = newAddress;
+}
+
+void WriteToPort(int port, State8080* state)
+{
+	switch (port)
+	{
+	case 2:
+	{
+		state->shift_amount = state->a & 0b111;
+		break;
+	}		
+	case 3:
+		state->ports.w3 = state->a;
+		break;
+	case 4:
+		state->shift >>= 8;
+		state->shift |= state->a << 8;
+		break;
+	case 5:
+		state->ports.w5 = state->a;
+		break;
+	case 6:
+		state->ports.w6 = state->a;
+		break;
+	}
+}
+
+void ReadFromPort(int port, State8080* state)
+{
+	switch (port)
+	{
+	case 0:
+		state->a = state->ports.r0;
+		break;
+	case 1:
+		state->a = state->ports.r1;
+		break;
+	case 2:
+		state->a = state->ports.r2;
+		break;
+	case 3:
+	{
+		uint16_t temp = state->shift << state->shift_amount;
+		temp >>= 8;
+		state->a = temp;
+		break;
+	}		
+	}
 }
 
 void Emulate(State8080* state)
@@ -923,6 +985,7 @@ void Emulate(State8080* state)
 		}		
 		break;
 	case 0xd3:
+		WriteToPort(opcode[1], state);
 		state->pc += 2;
 		state->cycles -= 10;
 		break;
@@ -965,15 +1028,7 @@ void Emulate(State8080* state)
 		}
 		break;
 	case 0xdb:
-		if (opcode[1] == 1 || opcode[1] == 2 || opcode[1] == 3)
-		{
-			//state->a = 0;
-		}
-		else
-		{
-			printf("IN requesting port that is not 1 or 2 or 3");
-			getchar();
-		}
+		ReadFromPort(opcode[1], state);
 		state->pc += 2;
 		state->cycles -= 10;
 		break;
@@ -989,6 +1044,18 @@ void Emulate(State8080* state)
 		state->sp += 2;
 		state->pc++;
 		state->cycles -= 10;
+		break;
+	case 0xe2:
+		if (state->cc.p == 0)
+		{
+			state->pc = (opcode[2] << 8) | opcode[1];
+			state->cycles -= 15;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 10;
+		}
 		break;
 	case 0xe3:
 	{
@@ -1033,6 +1100,18 @@ void Emulate(State8080* state)
 		state->cycles -= 4;
 		break;
 	}
+	case 0xea:
+		if (state->cc.p)
+		{
+			state->pc = (opcode[2] << 8) | opcode[1];
+			state->cycles -= 15;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 10;
+		}
+		break;
 	case 0xeb:
 	{
 		uint8_t temp = state->d;
@@ -1055,6 +1134,18 @@ void Emulate(State8080* state)
 		state->sp += 2;
 		state->pc++;
 		state->cycles -= 10;
+		break;
+	case 0xf2:
+		if (state->cc.s == 0)
+		{
+			state->pc = (opcode[2] << 8) | opcode[1];
+			state->cycles -= 15;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 10;
+		}
 		break;
 	case 0xf3: // DI
 		state->interrupt_enabled = false;
