@@ -20,12 +20,12 @@ typedef struct ConditionCodes {
 };
 
 typedef struct Ports {
-	uint8_t r0 : 1;
-	uint8_t r1 : 1;
-	uint8_t r2 : 1;
-	uint8_t w3 : 1;
-	uint8_t w5 : 1;
-	uint8_t w6 : 1;
+	uint8_t r0 : 8;
+	uint8_t r1 : 8;
+	uint8_t r2 : 8;
+	uint8_t w3 : 8;
+	uint8_t w5 : 8;
+	uint8_t w6 : 8;
 };
 
 typedef struct State8080 {
@@ -72,9 +72,9 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 2800000; i++)
+	for (int i = 0; i <= 50000000; i++)
 	{
-		if (i > 2749914 && i % 10 == 0)
+		if (false)
 		{
 			printf("Instruction %d: Currently running instruction 0x%02x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x %d ", i, state->memory[state->pc], state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp, 16667 - state->cycles);
 			
@@ -308,6 +308,12 @@ void Emulate(State8080* state)
 		state->cycles -= 7;
 		break;
 	}
+	case 0xc:
+		state->c += 1;
+		SetFlags(state->c, false, state);
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0xd: // DCR C
 		state->c -= 1;
 		SetFlags(state->c, false, state);
@@ -640,6 +646,11 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 5;
 		break;
+	case 0x65:
+		state->h = state->l;
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x66:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -770,6 +781,12 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0x97:
+		state->a = 0;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
 	case 0xa0:
 		state->a = state->a & state->b;
 		SetFlags(state->a, true, state);
@@ -825,6 +842,11 @@ void Emulate(State8080* state)
 	}
 	case 0xb8:
 		SetFlags(state->a - state->b, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xbc:
+		SetFlags(state->a - state->h, true, state);
 		state->pc++;
 		state->cycles -= 4;
 		break;
@@ -988,6 +1010,18 @@ void Emulate(State8080* state)
 		WriteToPort(opcode[1], state);
 		state->pc += 2;
 		state->cycles -= 10;
+		break;
+	case 0xd4:
+		if (state->cc.cy == 0)
+		{
+			Call(opcode[2] << 8 | opcode[1], 3, state);
+			state->cycles -= 18;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 11;
+		}
 		break;
 	case 0xd5:
 		state->memory[state->sp - 2] = state->e;
