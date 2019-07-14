@@ -4,6 +4,7 @@
 #include "stdafx.h"
 #include <iostream>
 #include <stdio.h>
+#include <bitset>
 #include <SDL.h>
 #include "SDLHelper.h"
 #undef main // SDL.h for whatever reason defines main as something else and breaks int main()
@@ -161,8 +162,8 @@ void ProcessInterrupt(State8080* state, SDLHelper* sdlHelper)
 			else
 			{
 				state->interrupt_pointer = 0x10;
-			}
-			UpdateDisplay(state, *sdlHelper);
+				UpdateDisplay(state, *sdlHelper);
+			}			
 		}
 		state->cycles += 16667;
 	}
@@ -916,7 +917,7 @@ void Emulate(State8080* state)
 		break;
 	case 0xc6:
 	{
-		uint16_t answer = (uint16_t)state->a + (uint16_t)opcode[1];
+		uint16_t answer = state->a + opcode[1];
 		SetFlags(answer, true, state);
 		state->a = answer;
 		state->pc += 2;
@@ -972,9 +973,19 @@ void Emulate(State8080* state)
 		state->memory[state->sp - 2] = returnAddress & 0xff;
 		state->sp -= 2;
 		state->pc = (opcode[2] << 8) | opcode[1];
-		state->cycles -= 17;
+		state->cycles -= 17;	
 		break;
 	}
+	case 0xce:
+	{
+		uint16_t answer = state->a + opcode[1] + state->cc.cy;
+		state->a = answer;
+		SetFlags(answer, true, state);
+		state->pc += 2;
+		state->cycles -= 7;
+		break;
+	}
+		
 	case 0xd0:
 		if (state->cc.cy == 0)
 		{
@@ -1031,11 +1042,14 @@ void Emulate(State8080* state)
 		state->cycles -= 11;
 		break;
 	case 0xd6:
-		state->a = state->a - opcode[1];
-		SetFlags(state->a, true, state);
+	{
+		uint16_t answer = state->a - opcode[1];
+		state->a = answer;
+		SetFlags(answer, true, state);
 		state->pc += 2;
 		state->cycles -= 7;
 		break;
+	}	
 	case 0xd8: // RC - Return if carry flag is true
 		if (state->cc.cy)
 		{
@@ -1066,12 +1080,28 @@ void Emulate(State8080* state)
 		state->pc += 2;
 		state->cycles -= 10;
 		break;
+	case 0xdc:
+		if (state->cc.cy)
+		{
+			Call((opcode[2] << 8) | opcode[1], 3, state);
+			state->cycles -= 18;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 11;
+		}
+		break;
 	case 0xde:
+	{
+		uint16_t answer = state->a - opcode[1] - state->cc.cy;
 		state->a = state->a - opcode[1] - state->cc.cy;
-		SetFlags(state->a, true, state);
+		SetFlags(answer, true, state);
 		state->pc += 2;
 		state->cycles -= 7;
 		break;
+	}
+		
 	case 0xe1:
 		state->l = state->memory[state->sp];
 		state->h = state->memory[state->sp + 1];
@@ -1102,6 +1132,18 @@ void Emulate(State8080* state)
 		state->cycles -= 4;
 		break;
 	}
+	case 0xe4:
+		if (state->cc.p == 0)
+		{
+			Call((opcode[2] << 8) | opcode[1], 3, state);
+			state->cycles -= 18;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 11;
+		}
+		break;
 	case 0xe5:
 		state->memory[state->sp - 2] = state->l;
 		state->memory[state->sp - 1] = state->h;
@@ -1158,6 +1200,24 @@ void Emulate(State8080* state)
 		state->cycles -= 4;
 		break;
 	}
+	case 0xec:
+		if (state->cc.p)
+		{
+			Call((opcode[2] << 8) | opcode[1], 3, state);
+			state->cycles -= 18;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 11;
+		}
+		break;
+	case 0xee:
+		state->a = state->a ^ opcode[1];
+		SetFlags(state->a, true, state);
+		state->pc += 2;
+		state->cycles -= 7;
+		break;
 	case 0xf1:
 		state->cc.z = state->memory[state->sp] & 0b1;
 		state->cc.s = (state->memory[state->sp] >> 1) & 0b1;
@@ -1185,6 +1245,18 @@ void Emulate(State8080* state)
 		state->interrupt_enabled = false;
 		state->pc++;
 		state->cycles -= 4;
+		break;
+	case 0xf4:
+		if (state->cc.s == 0)
+		{
+			Call((opcode[2] << 8) | opcode[1], 3, state);
+			state->cycles -= 18;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 11;
+		}
 		break;
 	case 0xf5:
 		state->memory[state->sp - 1] = state->a;
@@ -1216,6 +1288,18 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0xfc:
+		if (state->cc.s)
+		{
+			Call((opcode[2] << 8) | opcode[1], 3, state);
+			state->cycles -= 18;
+		}
+		else
+		{
+			state->pc += 3;
+			state->cycles -= 11;
+		}
+		break;
 	case 0xfe:
 	{
 		SetFlags(state->a - opcode[1], true, state);
@@ -1234,7 +1318,8 @@ void SetFlags(int answer, bool changeCarry, State8080* state)
 {
 	state->cc.z = ((answer & 0xff) == 0);
 	state->cc.s = ((answer & 0x80) != 0);
-	state->cc.p = answer % 2 == 0;
+	std::bitset<32> parity = answer & 0xff;
+	state->cc.p = parity.count() % 2 == 0;
 	if (changeCarry)
 		state->cc.cy = (answer > 0xff || answer < 0);
 }
