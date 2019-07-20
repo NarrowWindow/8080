@@ -73,9 +73,9 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 50000000; i++)
+	for (int i = 0; i <= 350; i++)
 	{
-		if (false)
+		if (true)
 		{
 			printf("Instruction %d: Currently running instruction 0x%02x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x %d ", i, state->memory[state->pc], state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp, 16667 - state->cycles);
 			
@@ -127,7 +127,7 @@ void Init(State8080* state, char* romName)
 	state->memory = (uint8_t*)malloc(0xffff);
 
 	// Store the rom in allocated memory
-	fread(state->memory, fsize, 1, romFile);
+	fread(state->memory + 0x100, fsize, 1, romFile);
 	fclose(romFile);
 
 	// Clear the RAM
@@ -143,6 +143,16 @@ void Init(State8080* state, char* romName)
 	{
 		state->memory[i] = 0;
 	}
+  
+	state->memory[0] = 0xc3;
+	state->memory[1] = 0;
+	state->memory[2] = 0x01;
+
+	state->memory[368] = 0x7;
+   
+	state->memory[0x59c] = 0xc3;  
+	state->memory[0x59d] = 0xc2;
+	state->memory[0x59e] = 0x05;
 }
 
 void ProcessInterrupt(State8080* state, SDLHelper* sdlHelper)
@@ -301,7 +311,7 @@ void Emulate(State8080* state)
 		state->cycles -= 11;
 		break;
 	}
-	case 0xa:
+	case 0x0a:
 	{
 		uint16_t address = (state->b << 8) | state->c;
 		state->a = state->memory[address];
@@ -309,24 +319,24 @@ void Emulate(State8080* state)
 		state->cycles -= 7;
 		break;
 	}
-	case 0xc:
+	case 0x0c:
 		state->c += 1;
 		SetFlags(state->c, false, state);
 		state->pc++;
 		state->cycles -= 5;
 		break;
-	case 0xd: // DCR C
+	case 0x0d: // DCR C
 		state->c -= 1;
 		SetFlags(state->c, false, state);
 		state->pc++;
 		state->cycles -= 5;
 		break;
-	case 0xe:
+	case 0x0e:
 		state->c = opcode[1];
 		state->pc += 2;
 		state->cycles -= 7;
 		break;
-	case 0xf:
+	case 0x0f:
 	{
 		uint8_t lastBit = (state->a & 0b1);
 		state->cc.cy = lastBit;
@@ -392,6 +402,23 @@ void Emulate(State8080* state)
 		state->cycles -= 7;
 		break;
 	}
+	case 0x1c:
+		state->e++;
+		SetFlags(state->e, false, state);
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x1d:
+		state->e--;
+		SetFlags(state->e, false, state);
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x1e:
+		state->e = opcode[1];
+		state->pc += 2;
+		state->cycles -= 7;
+		break;
 	case 0x1f:
 	{
 		uint8_t lastBit = (state->a & 0b1);
@@ -427,6 +454,18 @@ void Emulate(State8080* state)
 		state->cycles -= 6;
 		break;
 	}
+	case 0x24:
+		state->h++;
+		SetFlags(state->h, false, state);
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x25:
+		state->h--;
+		SetFlags(state->h, false, state);
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x26:
 		state->h = opcode[1];
 		state->pc += 2;
@@ -463,6 +502,12 @@ void Emulate(State8080* state)
 	}
 	case 0x2c:
 		state->l++;
+		SetFlags(state->l, false, state);
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x2d:
+		state->l--;
 		SetFlags(state->l, false, state);
 		state->pc++;
 		state->cycles -= 5;
@@ -574,6 +619,16 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 5;
 		break;
+	case 0x44:
+		state->b = state->h;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x45:
+		state->b = state->l;
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x46:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -589,6 +644,26 @@ void Emulate(State8080* state)
 		state->cycles -= 5;
 		break;
 	}
+	case 0x48:
+		state->c = state->b;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x4a:
+		state->c = state->d;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x4b:
+		state->c = state->e;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x4c:
+		state->c = state->h;
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x4d:
 		state->c = state->l;
 		state->pc++;
@@ -607,12 +682,32 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 5;
 		break;
+	case 0x50:
+		state->d = state->b;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x51:
+		state->d = state->c;
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x52: // MOV D,D
 		state->pc++;
 		state->cycles -= 5;
 		break;
 	case 0x53: // MOV D,E
 		state->d = state->e;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x54:
+		state->d = state->h;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x55:
+		state->d = state->l;
 		state->pc++;
 		state->cycles -= 5;
 		break;
@@ -629,6 +724,31 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 5;
 		break;
+	case 0x58:
+		state->e = state->b;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x59:
+		state->e = state->c;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x5a:
+		state->e = state->d;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x5c:
+		state->e = state->h;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x5d:
+		state->e = state->l;
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x5e:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -642,8 +762,23 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 5;
 		break;
+	case 0x60:
+		state->h = state->b;
+		state->pc++;
+		state->cycles -= 5;
+		break;
 	case 0x61:
 		state->h = state->c;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x62:
+		state->h = state->d;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x63:
+		state->h = state->e;
 		state->pc++;
 		state->cycles -= 5;
 		break;
@@ -672,6 +807,21 @@ void Emulate(State8080* state)
 		break;
 	case 0x69:
 		state->l = state->c;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x6a:
+		state->l = state->d;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x6b:
+		state->l = state->e;
+		state->pc++;
+		state->cycles -= 5;
+		break;
+	case 0x6c:
+		state->l = state->h;
 		state->pc++;
 		state->cycles -= 5;
 		break;
@@ -760,12 +910,42 @@ void Emulate(State8080* state)
 		state->cycles -= 4;
 		break;
 	}
-	case 0x85:
-		state->a += state->l;
-		SetFlags(state->a, true, state);
+	case 0x82:
+	{
+		uint16_t answer = state->a + state->d;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	}
+	case 0x83:
+	{
+		uint16_t answer = state->a + state->e;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x84:
+	{
+		uint16_t answer = state->a + state->h;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x85:
+	{
+		uint16_t answer = state->a + state->l;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}		
 	case 0x86:
 	{
 		uint16_t address = (state->h << 8) | state->l;
@@ -776,20 +956,233 @@ void Emulate(State8080* state)
 		state->cycles -= 7;
 		break;
 	}
-	case 0x89:
-		state->a += state->c + state->cc.cy;
-		SetFlags(state->a, true, state);
+	case 0x87:
+	{
+		uint16_t answer = state->a + state->a;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	}
+	case 0x88:
+	{
+		uint16_t answer = state->a + state->b + state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x89:
+	{
+		uint16_t answer = state->a + state->c + state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x8a:
+	{
+		uint16_t answer = state->a + state->d + state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x8b:
+	{
+		uint16_t answer = state->a + state->e + state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x8c:
+	{
+		uint16_t answer = state->a + state->h + state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x8d:
+	{
+		uint16_t answer = state->a + state->l + state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x8f:
+	{
+		uint16_t answer = state->a + state->a + state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x90:
+	{
+		uint16_t answer = state->a - state->b;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x91:
+	{
+		uint16_t answer = state->a - state->c;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x92:
+	{
+		uint16_t answer = state->a - state->d;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x93:
+	{
+		uint16_t answer = state->a - state->e;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x94:
+	{
+		uint16_t answer = state->a - state->h;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x95:
+	{
+		uint16_t answer = state->a - state->l;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
 	case 0x97:
 		state->a = 0;
 		SetFlags(state->a, true, state);
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0x98:
+	{
+		uint16_t answer = state->a - state->b - state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x99:
+	{
+		uint16_t answer = state->a - state->c - state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x9a:
+	{
+		uint16_t answer = state->a - state->d - state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x9b:
+	{
+		uint16_t answer = state->a - state->e - state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x9c:
+	{
+		uint16_t answer = state->a - state->h - state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x9d:
+	{
+		uint16_t answer = state->a - state->l - state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
+	case 0x9f:
+	{
+		uint16_t answer = state->a - state->a - state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
 	case 0xa0:
 		state->a = state->a & state->b;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xa1:
+		state->a = state->a & state->c;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xa2:
+		state->a = state->a & state->d;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xa3:
+		state->a = state->a & state->e;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xa4:
+		state->a = state->a & state->h;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xa5:
+		state->a = state->a & state->l;
 		SetFlags(state->a, true, state);
 		state->pc++;
 		state->cycles -= 4;
@@ -814,6 +1207,36 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0xa9:
+		state->a = state->a ^ state->c;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xaa:
+		state->a = state->a ^ state->d;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xab:
+		state->a = state->a ^ state->e;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xac:
+		state->a = state->a ^ state->h;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xad:
+		state->a = state->a ^ state->l;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
 	case 0xaf:
 		state->a = state->a ^ state->a;
 		SetFlags(state->a, true, state);
@@ -826,8 +1249,32 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0xb1:
+		state->a = state->a | state->c;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xb2:
+		state->a = state->a | state->d;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xb3:
+		state->a = state->a | state->e;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
 	case 0xb4:
 		state->a |= state->h;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xb5:
+		state->a = state->a | state->l;
 		SetFlags(state->a, true, state);
 		state->pc++;
 		state->cycles -= 4;
@@ -841,6 +1288,12 @@ void Emulate(State8080* state)
 		state->cycles -= 7;
 		break;
 	}
+	case 0xb7:
+		state->a = state->a | state->a;
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
 	case 0xb8:
 		SetFlags(state->a - state->b, true, state);
 		state->pc++;
@@ -968,12 +1421,35 @@ void Emulate(State8080* state)
 		break;
 	case 0xcd: // CALL
 	{
-		uint16_t returnAddress = state->pc + 3;
-		state->memory[state->sp - 1] = (returnAddress >> 8) & 0xff;
-		state->memory[state->sp - 2] = returnAddress & 0xff;
-		state->sp -= 2;
-		state->pc = (opcode[2] << 8) | opcode[1];
-		state->cycles -= 17;	
+		if (5 == ((opcode[2] << 8) | opcode[1]))
+		{
+			if (state->c == 9)
+			{
+				uint16_t offset = (state->d << 8) | (state->e);
+				uint8_t* str = &state->memory[offset + 3];  //skip the prefix bytes    
+				while (*str != '$')
+					printf("%c", *str++);
+				printf("\n");
+			}
+			else if (state->c == 2)
+			{
+				//saw this in the inspected code, never saw it called    
+				printf("print char routine called\n");
+			}
+		}
+		else if (0 == ((opcode[2] << 8) | opcode[1]))
+		{
+			exit(0);
+		}
+		else
+		{
+			uint16_t returnAddress = state->pc + 3;
+			state->memory[state->sp - 1] = (returnAddress >> 8) & 0xff;
+			state->memory[state->sp - 2] = returnAddress & 0xff;
+			state->sp -= 2;
+			state->pc = (opcode[2] << 8) | opcode[1];
+			state->cycles -= 17;
+		}
 		break;
 	}
 	case 0xce:
@@ -1101,7 +1577,18 @@ void Emulate(State8080* state)
 		state->cycles -= 7;
 		break;
 	}
-		
+	case 0xe0:
+		if (state->cc.p == 0)
+		{
+			Return(state);
+			state->cycles -= 11;
+		}
+		else
+		{
+			state->pc++;
+			state->cycles -= 5;
+		}
+		break;
 	case 0xe1:
 		state->l = state->memory[state->sp];
 		state->h = state->memory[state->sp + 1];
@@ -1218,6 +1705,18 @@ void Emulate(State8080* state)
 		state->pc += 2;
 		state->cycles -= 7;
 		break;
+	case 0xf0:
+		if (state->cc.s == 0)
+		{
+			Return(state);
+			state->cycles -= 11;
+		}
+		else
+		{
+			state->pc++;
+			state->cycles -= 5;
+		}
+		break;
 	case 0xf1:
 		state->cc.z = state->memory[state->sp] & 0b1;
 		state->cc.s = (state->memory[state->sp] >> 1) & 0b1;
@@ -1270,6 +1769,18 @@ void Emulate(State8080* state)
 		SetFlags(state->a, true, state);
 		state->pc += 2;
 		state->cycles -= 7;
+		break;
+	case 0xf8:
+		if (state->cc.s == 1)
+		{
+			Return(state);
+			state->cycles -= 11;
+		}
+		else
+		{
+			state->pc++;
+			state->cycles -= 5;
+		}
 		break;
 	case 0xfa: // JM adr - Jump if the sign condition code is 1
 		if (state->cc.s == 1)
