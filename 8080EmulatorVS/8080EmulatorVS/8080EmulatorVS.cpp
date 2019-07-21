@@ -58,6 +58,7 @@ void Return(State8080* state);
 void Call(uint16_t newAddress, int instructionSize, State8080* state);
 void WriteToPort(int port, State8080* state);
 void ReadFromPort(int port, State8080* state);
+uint16_t GetHL(State8080* state);
 
 SDLHelper sdlHelper;
 
@@ -73,9 +74,14 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 350; i++)
+	for (int i = 0; i <= 50000000; i++)
 	{
-		if (true)
+		if (i == 120000)
+		{
+			state->ports.r1 = 0b00000100;
+		}
+
+		if (false)
 		{
 			printf("Instruction %d: Currently running instruction 0x%02x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x %d ", i, state->memory[state->pc], state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp, 16667 - state->cycles);
 			
@@ -105,6 +111,8 @@ int main(int argc, char** argv)
 
 void Init(State8080* state, char* romName)
 {
+	state->ports.r1 = 1;
+
 	// Open ROM file
 	FILE* romFile;
 	if (romName == nullptr)
@@ -127,7 +135,7 @@ void Init(State8080* state, char* romName)
 	state->memory = (uint8_t*)malloc(0xffff);
 
 	// Store the rom in allocated memory
-	fread(state->memory + 0x100, fsize, 1, romFile);
+	fread(state->memory, fsize, 1, romFile);
 	fclose(romFile);
 
 	// Clear the RAM
@@ -143,16 +151,6 @@ void Init(State8080* state, char* romName)
 	{
 		state->memory[i] = 0;
 	}
-  
-	state->memory[0] = 0xc3;
-	state->memory[1] = 0;
-	state->memory[2] = 0x01;
-
-	state->memory[368] = 0x7;
-   
-	state->memory[0x59c] = 0xc3;  
-	state->memory[0x59d] = 0xc2;
-	state->memory[0x59e] = 0x05;
 }
 
 void ProcessInterrupt(State8080* state, SDLHelper* sdlHelper)
@@ -228,6 +226,8 @@ void ReadFromPort(int port, State8080* state)
 		break;
 	case 1:
 		state->a = state->ports.r1;
+		printf("read port 1\n");
+		state->ports.r1 = 0;
 		break;
 	case 2:
 		state->a = state->ports.r2;
@@ -240,6 +240,11 @@ void ReadFromPort(int port, State8080* state)
 		break;
 	}		
 	}
+}
+
+uint16_t GetHL(State8080* state)
+{
+	return (state->h << 8) | state->l;
 }
 
 void Emulate(State8080* state)
@@ -257,6 +262,14 @@ void Emulate(State8080* state)
 		state->pc += 3;
 		state->cycles -= 10;
 		break;
+	case 0x02:
+	{
+		uint16_t address = (state->b << 8) | state->c;
+		state->memory[address] = state->a;
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
 	case 0x03:
 	{
 		uint16_t bc = (state->b << 8) | state->c;
@@ -301,7 +314,7 @@ void Emulate(State8080* state)
 	}
 	case 0x09:
 	{
-		uint16_t hl = (state->h << 8) | state->l;
+		uint16_t hl = GetHL(state);
 		uint16_t bc = (state->b << 8) | state->c;
 		uint32_t answer = hl + bc;
 		state->h = (answer >> 8) & 0xff;
@@ -317,6 +330,16 @@ void Emulate(State8080* state)
 		state->a = state->memory[address];
 		state->pc++;
 		state->cycles -= 7;
+		break;
+	}
+	case 0x0b:
+	{
+		uint16_t bc = (state->b << 8) | state->c;
+		bc--;
+		state->b = (bc >> 8) & 0xff;
+		state->c = bc & 0xff;
+		state->pc++;
+		state->cycles -= 6;
 		break;
 	}
 	case 0x0c:
@@ -353,6 +376,14 @@ void Emulate(State8080* state)
 		state->pc += 3;
 		state->cycles -= 10;
 		break;
+	case 0x12:
+	{
+		uint16_t address = (state->d << 8) | state->e;
+		state->memory[address] = state->a;
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
 	case 0x13:
 	{
 		uint16_t address = (state->d << 8) | state->e;
@@ -382,9 +413,20 @@ void Emulate(State8080* state)
 		state->pc += 2;
 		state->cycles -= 7;
 		break;
+	case 0x17:
+	{
+		uint8_t firstBit = (state->a & 0b10000000);
+		bool prevCarry = state->cc.cy;
+		state->cc.cy = firstBit;
+		state->a <<= 1;
+		state->a |= prevCarry;
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
 	case 0x19:
 	{
-		uint16_t hl = (state->h << 8) | state->l;
+		uint16_t hl = GetHL(state);
 		uint16_t de = (state->d << 8) | state->e;
 		uint32_t answer = hl + de;
 		state->h = (answer >> 8) & 0xff;
@@ -400,6 +442,16 @@ void Emulate(State8080* state)
 		state->a = state->memory[address];
 		state->pc++;
 		state->cycles -= 7;
+		break;
+	}
+	case 0x1b:
+	{
+		uint16_t de = (state->d << 8) | state->e;
+		de--;
+		state->d = (de >> 8) & 0xff;
+		state->e = de & 0xff;
+		state->pc++;
+		state->cycles -= 6;
 		break;
 	}
 	case 0x1c:
@@ -446,7 +498,7 @@ void Emulate(State8080* state)
 	}
 	case 0x23:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		address += 1;
 		state->h = (address >> 8) & 0xff;
 		state->l = address & 0xff;
@@ -471,9 +523,26 @@ void Emulate(State8080* state)
 		state->pc += 2;
 		state->cycles -= 7;
 		break;
+	case 0x27:
+	{
+		uint16_t answer = state->a;
+		if ((answer & 0xf) > 9)
+		{
+			answer += 6;
+		}
+		if ((answer >> 4) > 9)
+		{
+			answer += 96;
+		}
+		SetFlags(answer, true, state);
+		state->a = answer;
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	}
 	case 0x29:
 	{
-		uint16_t hl = (state->h << 8) | state->l;
+		uint16_t hl = GetHL(state);
 		uint32_t answer = hl * 2;
 		state->h = (answer >> 8) & 0xff;
 		state->l = answer & 0xff;
@@ -493,7 +562,7 @@ void Emulate(State8080* state)
 	}
 	case 0x2b:
 	{
-		uint16_t hl = (state->h << 8) | state->l - 1;
+		uint16_t hl = GetHL(state) - 1;
 		state->l = hl & 0xff;
 		state->h = (hl & 0xff00) >> 8;
 		state->pc++;
@@ -535,9 +604,14 @@ void Emulate(State8080* state)
 		state->cycles -= 13;
 		break;
 	}
+	case 0x33:
+		state->sp++;
+		state->pc++;
+		state->cycles -= 6;
+		break;
 	case 0x34:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->memory[address]++;
 		SetFlags(state->memory[address], false, state);
 		state->pc++;
@@ -546,7 +620,7 @@ void Emulate(State8080* state)
 	}
 	case 0x35:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->memory[address] -= 1;
 		SetFlags(state->memory[address], false, state);
 		state->pc++;
@@ -555,7 +629,7 @@ void Emulate(State8080* state)
 	}
 	case 0x36:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->memory[address] = opcode[1];
 		state->pc += 2;
 		state->cycles -= 10;
@@ -568,7 +642,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x39:
 	{
-		uint16_t hl = (state->h << 8) | state->l;
+		uint16_t hl = GetHL(state);
 		uint32_t answer = hl + state->sp;
 		state->h = (answer >> 8) & 0xff;
 		state->l = answer & 0xff;
@@ -583,6 +657,13 @@ void Emulate(State8080* state)
 		state->a = state->memory[address];
 		state->pc += 3;
 		state->cycles -= 13;
+		break;
+	}
+	case 0x3b:
+	{
+		state->sp--;
+		state->pc++;
+		state->cycles -= 6;
 		break;
 	}
 	case 0x3c:
@@ -603,6 +684,11 @@ void Emulate(State8080* state)
 		state->a = opcode[1];
 		state->pc += 2;
 		state->cycles -= 7;
+		break;
+	case 0x3f:
+		state->cc.cy = !state->cc.cy;
+		state->pc++;
+		state->cycles -= 4;
 		break;
 	case 0x41:
 		state->b = state->c;
@@ -631,7 +717,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x46:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->b = state->memory[address];
 		state->pc++;
 		state->cycles -= 7;
@@ -671,7 +757,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x4e:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->c = state->memory[address];
 		state->pc++;
 		state->cycles -= 7;
@@ -713,7 +799,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x56:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->d = state->memory[address];
 		state->pc++;
 		state->cycles -= 7;
@@ -751,7 +837,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x5e:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->e = state->memory[address];
 		state->pc++;
 		state->cycles -= 7;
@@ -789,7 +875,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x66:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->h = state->memory[address];
 		state->pc++;
 		state->cycles -= 7;
@@ -825,6 +911,14 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 5;
 		break;
+	case 0x6e:
+	{
+		uint16_t address = GetHL(state);
+		state->l = state->memory[address];
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
 	case 0x6f:
 		state->l = state->a;
 		state->pc++;
@@ -832,7 +926,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x70:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->memory[address] = state->b;
 		state->pc++;
 		state->cycles -= 7;
@@ -840,15 +934,47 @@ void Emulate(State8080* state)
 	}
 	case 0x71:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->memory[address] = state->c;
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
+	case 0x72:
+	{
+		uint16_t address = GetHL(state);
+		state->memory[address] = state->d;
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
+	case 0x73:
+	{
+		uint16_t address = GetHL(state);
+		state->memory[address] = state->e;
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
+	case 0x74:
+	{
+		uint16_t address = GetHL(state);
+		state->memory[address] = state->h;
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
+	case 0x75:
+	{
+		uint16_t address = GetHL(state);
+		state->memory[address] = state->l;
 		state->pc++;
 		state->cycles -= 7;
 		break;
 	}
 	case 0x77:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->memory[address] = state->a;
 		state->pc++;
 		state->cycles -= 7;
@@ -886,7 +1012,7 @@ void Emulate(State8080* state)
 		break;
 	case 0x7e:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->a = state->memory[address];
 		state->pc++;
 		state->cycles -= 7;
@@ -948,7 +1074,7 @@ void Emulate(State8080* state)
 	}		
 	case 0x86:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		uint16_t answer = (uint16_t)state->a + (uint16_t)state->memory[address];
 		state->a = answer & 0xff;
 		SetFlags(answer, true, state);
@@ -1019,6 +1145,16 @@ void Emulate(State8080* state)
 		state->cycles -= 4;
 		break;
 	}
+	case 0x8e:
+	{
+		uint16_t address = GetHL(state);
+		uint16_t answer = state->a + state->memory[address] + state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
 	case 0x8f:
 	{
 		uint16_t answer = state->a + state->a + state->cc.cy;
@@ -1082,6 +1218,16 @@ void Emulate(State8080* state)
 		state->cycles -= 4;
 		break;
 	}
+	case 0x96:
+	{
+		uint16_t address = GetHL(state);
+		uint16_t answer = state->a - state->memory[address];
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
 	case 0x97:
 		state->a = 0;
 		SetFlags(state->a, true, state);
@@ -1142,6 +1288,16 @@ void Emulate(State8080* state)
 		state->cycles -= 4;
 		break;
 	}
+	case 0x9e:
+	{
+		uint16_t address = GetHL(state);
+		uint16_t answer = state->a - state->memory[address] - state->cc.cy;
+		state->a = answer & 0xff;
+		SetFlags(answer, true, state);
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
 	case 0x9f:
 	{
 		uint16_t answer = state->a - state->a - state->cc.cy;
@@ -1189,7 +1345,7 @@ void Emulate(State8080* state)
 		break;
 	case 0xa6:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->a = state->a & state->memory[address];
 		SetFlags(state->a, true, state);
 		state->pc++;
@@ -1237,6 +1393,15 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0xae:
+	{
+		uint16_t address = GetHL(state);
+		state->a = state->a ^ state->memory[address];
+		SetFlags(state->a, true, state);
+		state->pc++;
+		state->cycles -= 7;
+		break;
+	}
 	case 0xaf:
 		state->a = state->a ^ state->a;
 		SetFlags(state->a, true, state);
@@ -1281,7 +1446,7 @@ void Emulate(State8080* state)
 		break;
 	case 0xb6:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		state->a = state->a | state->memory[address];
 		SetFlags(state->a, true, state);
 		state->pc++;
@@ -1299,14 +1464,34 @@ void Emulate(State8080* state)
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0xb9:
+		SetFlags(state->a - state->c, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xba:
+		SetFlags(state->a - state->d, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
+	case 0xbb:
+		SetFlags(state->a - state->e, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
 	case 0xbc:
 		SetFlags(state->a - state->h, true, state);
 		state->pc++;
 		state->cycles -= 4;
 		break;
+	case 0xbd:
+		SetFlags(state->a - state->l, true, state);
+		state->pc++;
+		state->cycles -= 4;
+		break;
 	case 0xbe:
 	{
-		uint16_t address = (state->h << 8) | state->l;
+		uint16_t address = GetHL(state);
 		SetFlags(state->a - state->memory[address], true, state);
 		state->pc++;
 		state->cycles -= 7;
@@ -1335,7 +1520,7 @@ void Emulate(State8080* state)
 	case 0xc2:
 		if (state->cc.z == 0)
 		{
-			state->pc = opcode[2] * 256 + opcode[1];
+			state->pc = (opcode[2] << 8) | opcode[1];
 			state->cycles -= 15;
 		}
 		else
@@ -1610,7 +1795,7 @@ void Emulate(State8080* state)
 		break;
 	case 0xe3:
 	{
-		uint16_t hl = (state->h << 8) | state->l;
+		uint16_t hl = GetHL(state);
 		state->l = state->memory[state->sp];
 		state->memory[state->sp] = hl & 0xff;
 		state->h = state->memory[state->sp + 1];
@@ -1659,7 +1844,7 @@ void Emulate(State8080* state)
 		break;
 	case 0xe9:
 	{
-		state->pc = (state->h << 8) | state->l;
+		state->pc = GetHL(state);
 		state->cycles -= 4;
 		break;
 	}
@@ -1781,6 +1966,11 @@ void Emulate(State8080* state)
 			state->pc++;
 			state->cycles -= 5;
 		}
+		break;
+	case 0xf9:
+		state->sp = GetHL(state);
+		state->pc++;
+		state->cycles -= 6;
 		break;
 	case 0xfa: // JM adr - Jump if the sign condition code is 1
 		if (state->cc.s == 1)
