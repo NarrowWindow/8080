@@ -61,7 +61,7 @@ void ReadFromPort(int port, State8080* state);
 uint16_t GetHL(State8080* state);
 
 SDLHelper sdlHelper;
-//uint32_t* pixels = new uint32_t[224 * 256];
+uint32_t* pixels = new uint32_t[224 * 256];
 
 Uint32 frame_start;
 int time_between_frames;
@@ -114,6 +114,7 @@ int main(int argc, char** argv)
 	
 	free(state->memory);
 	delete(state);
+	delete(pixels);
 	SDL_DestroyTexture(sdlHelper.texture);
 	SDL_DestroyRenderer(sdlHelper.renderer);
 	SDL_DestroyWindow(sdlHelper.window);
@@ -139,6 +140,10 @@ void Init(State8080* state, char* romName)
 		printf("Error: Could not open file %s\n", romName);
 		exit(1);
 	}
+	if (romFile == NULL)
+	{
+		exit(1);
+	}
 
 	fseek(romFile, 0L, SEEK_END);
 	int fsize = ftell(romFile);
@@ -146,9 +151,13 @@ void Init(State8080* state, char* romName)
 
 	// Allocate memory to store the ROM
 	state->memory = (uint8_t*)malloc(0xffff);
+	if (state->memory == nullptr)
+	{
+		exit(1);
+	}
 
 	// Store the rom in allocated memory
-	fread(state->memory, fsize, 1, romFile);
+	fread(state->memory, 1, fsize, romFile);
 	fclose(romFile);
 
 	// Clear the RAM
@@ -2052,7 +2061,6 @@ void SetFlags(int answer, bool changeCarry, State8080* state)
 
 void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 {
-	
 	int videoPointer = 0x2400;
 	for (int w = 0; w < 224; w++)
 	{
@@ -2061,13 +2069,18 @@ void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 			int byte = state->memory[videoPointer];
 			for (int b = 0; b < 8; b++)
 			{
+				if ((h + 1) * 1792 - b * 224 + w >= 224 * 256)
+				{
+					continue;
+				}
 				if (byte % 2 == 0)
 				{
-					//pixels[(h + 1) * 1792 - b * 224 + w] = 0xff000000;
+					//int test = state->memory[999999];
+					pixels[(h + 1) * 1792 - b * 224 + w] = 0xff000000;
 				}
 				else
 				{
-					//pixels[(h + 1) * 1792 - b * 224 + w] = 0xffffffff;
+					pixels[(h + 1) * 1792 - b * 224 + w] = 0xffffffff;
 				}
 				byte /= 2;
 			}
@@ -2075,7 +2088,7 @@ void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 		}
 	}
 
-	//SDL_UpdateTexture(sdlHelper.texture, NULL, pixels, 224 * 4);
+	SDL_UpdateTexture(sdlHelper.texture, NULL, pixels, 224 * 4);
 	SDL_RenderClear(sdlHelper.renderer);
 	SDL_RenderCopy(sdlHelper.renderer, sdlHelper.texture, NULL, NULL);
 	SDL_RenderPresent(sdlHelper.renderer);
