@@ -10,4 +10,5 @@ public:
 
 	SDL_Window* window;
 	SDL_Renderer* renderer;
+	SDL_Texture* texture;
 };

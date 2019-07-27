@@ -61,6 +61,11 @@ void ReadFromPort(int port, State8080* state);
 uint16_t GetHL(State8080* state);
 
 SDLHelper sdlHelper;
+uint32_t* pixels = new uint32_t[224 * 256];
+
+Uint32 frame_start;
+int time_between_frames;
+bool hasQuit = false;
 
 int main(int argc, char** argv)
 {
@@ -74,16 +79,20 @@ int main(int argc, char** argv)
 	sdlHelper.init();	
 
 	// Emulate a fixed number of instructions
-	for (int i = 0; i <= 50000000; i++)
+	while (!hasQuit)
 	{
-		if (i == 120000)
+		SDL_Event e;
+		while (SDL_PollEvent(&e) != 0)
 		{
-			state->ports.r1 = 0b00000100;
+			if (e.type == SDL_QUIT)
+			{
+				hasQuit = true;
+			}
 		}
 
 		if (false)
 		{
-			printf("Instruction %d: Currently running instruction 0x%02x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x %d ", i, state->memory[state->pc], state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp, 16667 - state->cycles);
+			//printf("Instruction %d: Currently running instruction 0x%02x with state: %02x %02x%02x %02x%02x %02x%02x %04x %04x %d ", i, state->memory[state->pc], state->a, state->b, state->c, state->d, state->e, state->h, state->l, state->pc, state->sp, 16667 - state->cycles);
 			
 			if (state->cc.z)
 				printf("z");
@@ -103,15 +112,19 @@ int main(int argc, char** argv)
 		ProcessInterrupt(state, &sdlHelper);
 	}
 	
-	delete(state);
-	getchar();
+	free(state->memory);
+	free(state);
+	SDL_DestroyTexture(sdlHelper.texture);
+	SDL_DestroyRenderer(sdlHelper.renderer);
+	SDL_DestroyWindow(sdlHelper.window);
+	SDL_Quit();
 
 	return 0;
 }
 
 void Init(State8080* state, char* romName)
 {
-	state->ports.r1 = 1;
+	//state->ports.r1 = 1;
 
 	// Open ROM file
 	FILE* romFile;
@@ -151,10 +164,13 @@ void Init(State8080* state, char* romName)
 	{
 		state->memory[i] = 0;
 	}
+
+	frame_start = SDL_GetTicks();
 }
 
 void ProcessInterrupt(State8080* state, SDLHelper* sdlHelper)
 {
+
 	if (state->cycles <= 0)
 	{
 		if (state->interrupt_enabled)
@@ -169,12 +185,22 @@ void ProcessInterrupt(State8080* state, SDLHelper* sdlHelper)
 			}
 			else
 			{
+				time_between_frames = SDL_GetTicks() - frame_start;
+				frame_start = SDL_GetTicks();
+				//printf("%d\n", time_between_frames);
+				if (time_between_frames < 17)
+				{
+					SDL_Delay(17 - time_between_frames);
+				}
+
 				state->interrupt_pointer = 0x10;
 				UpdateDisplay(state, *sdlHelper);
+
+				
 			}			
 		}
 		state->cycles += 16667;
-	}
+	}	
 }
 
 void Return(State8080* state)
@@ -226,7 +252,6 @@ void ReadFromPort(int port, State8080* state)
 		break;
 	case 1:
 		state->a = state->ports.r1;
-		printf("read port 1\n");
 		state->ports.r1 = 0;
 		break;
 	case 2:
@@ -2027,6 +2052,7 @@ void SetFlags(int answer, bool changeCarry, State8080* state)
 
 void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 {
+	
 	int videoPointer = 0x2400;
 	for (int w = 0; w < 224; w++)
 	{
@@ -2037,17 +2063,25 @@ void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 			{
 				if (byte % 2 == 0)
 				{
-					SDL_SetRenderDrawColor(sdlHelper.renderer, 0x0, 0x0, 0x0, 0xFF);
+					pixels[(h + 1) * 1792 - b * 224 + w] = 0xff000000;
+					//SDL_SetRenderDrawColor(sdlHelper.renderer, 0, 0, 0, 0xFF);
 				}
 				else
 				{
-					SDL_SetRenderDrawColor(sdlHelper.renderer, 0xFF, 0xFF, 0xFF, 0xFF);
+					pixels[(h + 1) * 1792 - b * 224 + w] = 0xffffffff;
 				}
-				SDL_RenderDrawPoint(sdlHelper.renderer, w, (h + 1) * 8 - b - 1);
+				//SDL_RenderDrawPoint(sdlHelper.renderer, w, (h + 1) * 8 - b - 1);
 				byte /= 2;
 			}
 			videoPointer++;
+
+			
+			
 		}
 	}
+
+	SDL_UpdateTexture(sdlHelper.texture, NULL, pixels, 224 * 4);
+	SDL_RenderClear(sdlHelper.renderer);
+	SDL_RenderCopy(sdlHelper.renderer, sdlHelper.texture, NULL, NULL);
 	SDL_RenderPresent(sdlHelper.renderer);
 }
