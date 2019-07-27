@@ -61,7 +61,7 @@ void ReadFromPort(int port, State8080* state);
 uint16_t GetHL(State8080* state);
 
 SDLHelper sdlHelper;
-uint32_t* pixels = new uint32_t[224 * 256];
+//uint32_t* pixels = new uint32_t[224 * 256];
 
 Uint32 frame_start;
 int time_between_frames;
@@ -113,7 +113,7 @@ int main(int argc, char** argv)
 	}
 	
 	free(state->memory);
-	free(state);
+	delete(state);
 	SDL_DestroyTexture(sdlHelper.texture);
 	SDL_DestroyRenderer(sdlHelper.renderer);
 	SDL_DestroyWindow(sdlHelper.window);
@@ -160,7 +160,7 @@ void Init(State8080* state, char* romName)
 	{
 		state->memory[i] = 0xFF;
 	}
-	for (int i = 0x4000; i <= 0xFFFF; i++)
+	for (int i = 0x4000; i < 0xFFFF; i++)
 	{
 		state->memory[i] = 0;
 	}
@@ -2063,24 +2063,19 @@ void UpdateDisplay(State8080* state, SDLHelper sdlHelper)
 			{
 				if (byte % 2 == 0)
 				{
-					pixels[(h + 1) * 1792 - b * 224 + w] = 0xff000000;
-					//SDL_SetRenderDrawColor(sdlHelper.renderer, 0, 0, 0, 0xFF);
+					//pixels[(h + 1) * 1792 - b * 224 + w] = 0xff000000;
 				}
 				else
 				{
-					pixels[(h + 1) * 1792 - b * 224 + w] = 0xffffffff;
+					//pixels[(h + 1) * 1792 - b * 224 + w] = 0xffffffff;
 				}
-				//SDL_RenderDrawPoint(sdlHelper.renderer, w, (h + 1) * 8 - b - 1);
 				byte /= 2;
 			}
-			videoPointer++;
-
-			
-			
+			videoPointer++;			
 		}
 	}
 
-	SDL_UpdateTexture(sdlHelper.texture, NULL, pixels, 224 * 4);
+	//SDL_UpdateTexture(sdlHelper.texture, NULL, pixels, 224 * 4);
 	SDL_RenderClear(sdlHelper.renderer);
 	SDL_RenderCopy(sdlHelper.renderer, sdlHelper.texture, NULL, NULL);
 	SDL_RenderPresent(sdlHelper.renderer);
